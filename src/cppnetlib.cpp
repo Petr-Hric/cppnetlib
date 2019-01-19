@@ -26,6 +26,7 @@ namespace cppnetlib {
     }
 
     // Platform dependent definitions/declarations
+
 #if defined _WIN32
 
     namespace error {
@@ -271,7 +272,7 @@ namespace cppnetlib {
 
 #endif
 
-// Helpers
+    // Helpers
 
     namespace helpers {
         platform::NativeFamilyT toNativeFamily(const IPVer ipVersion) {
@@ -404,9 +405,6 @@ namespace cppnetlib {
         default:
             throw Exception(FUNC_NAME + ": Unknown IPVer value");
         }
-
-
-
         return sockAddr;
     }
 
@@ -466,7 +464,13 @@ namespace cppnetlib {
             *this = std::move(other);
         }
 
-        SocketBase::~SocketBase() {}
+        SocketBase::~SocketBase() {
+            try {
+                if (this->isOpen()) {
+                    this->close();
+                }
+            } catch (...) {}
+        }
 
         SocketBase& SocketBase::operator =(SocketBase&& other) {
             mIPVersion = other.mIPVersion;
@@ -700,11 +704,7 @@ namespace cppnetlib {
         ClientBase<IPProto::TCP>::ClientBase(const IPVer ipVersion, platform::SocketT && socket) :
             TCPSocketBase(ipVersion, std::move(socket)) {}
 
-        ClientBase<IPProto::TCP>::~ClientBase() {
-            try {
-                this->close();
-            } catch (...) {}
-        }
+        ClientBase<IPProto::TCP>::~ClientBase() {}
 
         void ClientBase<IPProto::TCP>::setBlocked(const bool blocked) {
             TCPSocketBase::setBlocked(blocked);
@@ -732,11 +732,7 @@ namespace cppnetlib {
             UDPSocketBase::open();
         }
 
-        Client<IPProto::UDP>::~Client() {
-            try {
-                this->close();
-            } catch (...) {}
-        }
+        Client<IPProto::UDP>::~Client() {}
 
         void Client<IPProto::UDP>::setBlocked(const bool blocked) {
             UDPSocketBase::setBlocked(blocked);
@@ -778,7 +774,6 @@ namespace cppnetlib {
         }
 
         void Server<IPProto::TCP>::tryAccept(std::function<void(client::ClientBase<IPProto::TCP>&&, Address&& address)>& onAccept) const {
-
             static std::function<void(platform::SocketT&&, Address&&)> onAcceptInternal([&](platform::SocketT&& socket, Address&& address) {
                 onAccept(client::ClientBase<IPProto::TCP>(address.ipVersion(), std::move(socket)), std::move(address));
                 socket = INVALID_SOCKET_DESCRIPTOR;
