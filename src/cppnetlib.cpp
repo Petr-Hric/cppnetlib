@@ -1,7 +1,7 @@
-#include "cppnetlib.h"
+#include "cppnetlib/cppnetlib.h"
 
 #include "Endian/Endian.h"
-#include "Platform.h"
+#include "cppnetlib/Platform.h"
 
 #include <algorithm>
 #include <cassert>
