@@ -343,6 +343,7 @@ namespace cppnetlib {
     }
 
     Address::Address(const IPVer ipVersion, const IpT & ip, const PortT port) {
+        assert(ipVersion != IPVer::Unknown);
         mIpVersion = ipVersion;
         mIp = ip;
         mPort = port;
