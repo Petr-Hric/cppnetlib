@@ -97,7 +97,7 @@ namespace cppnetlib {
 
 namespace cppnetlib {
     namespace error {
-        std::string toString(const ReceiveError value);
+        std::string toString(const IOReturnValue value);
         std::string toString(const NativeErrorCodeT value);
     }
 

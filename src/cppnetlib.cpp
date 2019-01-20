@@ -437,7 +437,7 @@ namespace cppnetlib {
     // Error
 
     namespace error {
-        std::string toString(const ReceiveError value) {
+        std::string toString(const IOReturnValue value) {
             assert(static_cast<std::size_t>(value) < 3);
 
             static const std::string errorMessage[] = {
@@ -574,7 +574,7 @@ namespace cppnetlib {
             onAccept(std::move(socket), createAddress(addr));
         }
 
-        std::size_t TCPSocketBase::send(const TransmitDataT * data, const std::size_t size) const {
+        error::ExpectedValue<std::size_t, error::IOReturnValue> TCPSocketBase::send(const TransmitDataT * data, const std::size_t size) const {
             assert(data != nullptr);
             if (!isOpen()) {
                 throw Exception(FUNC_NAME + ": Could not send data, because the socket is not open");
@@ -586,6 +586,9 @@ namespace cppnetlib {
                 , 0);
 
             if (retv == SOCKET_OP_UNSUCCESSFUL) {
+                if (platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
+                    return error::makeError<std::size_t, error::IOReturnValue>(error::IOReturnValue::OpWouldBlock);
+                }
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
             }
 
@@ -594,7 +597,7 @@ namespace cppnetlib {
             return static_cast<std::size_t>(retv);
         }
 
-        error::ExpectedValue<std::size_t, error::ReceiveError> TCPSocketBase::receive(TransmitDataT * data, const std::size_t maxSize) const {
+        error::ExpectedValue<std::size_t, error::IOReturnValue> TCPSocketBase::receive(TransmitDataT * data, const std::size_t maxSize) const {
             assert(data != nullptr);
             if (!isOpen()) {
                 throw Exception(FUNC_NAME + ": Could not receive data, because the socket is not open");
@@ -607,11 +610,11 @@ namespace cppnetlib {
 
             if (retv == SOCKET_OP_UNSUCCESSFUL) {
                 if (platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
-                    return error::makeError<std::size_t, error::ReceiveError>(error::ReceiveError::OpWouldBlock);
+                    return error::makeError<std::size_t, error::IOReturnValue>(error::IOReturnValue::OpWouldBlock);
                 }
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
             } else if (retv == 0) {
-                return error::makeError<std::size_t, error::ReceiveError>(error::ReceiveError::GracefullyDisconnected);
+                return error::makeError<std::size_t, error::IOReturnValue>(error::IOReturnValue::GracefullyDisconnected);
             }
 
             assert(retv > 0);
@@ -637,7 +640,7 @@ namespace cppnetlib {
             mSocket = platform::nativeSocketOpen(helpers::toNativeFamily(ipVersion()), IPPROTO_UDP);
         }
 
-        std::size_t UDPSocketBase::sendTo(const TransmitDataT * data, const std::size_t size, const Address & address) const {
+        error::ExpectedValue<std::size_t, error::IOReturnValue> UDPSocketBase::sendTo(const TransmitDataT * data, const std::size_t size, const Address & address) const {
             assert(data != nullptr);
             if (!isOpen()) {
                 throw Exception(FUNC_NAME + ": Could not send data, because the socket is not open");
@@ -654,6 +657,9 @@ namespace cppnetlib {
                 , helpers::toSockLen(address));
 
             if (retv == SOCKET_OP_UNSUCCESSFUL) {
+                if (platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
+                    return error::makeError<std::size_t, error::IOReturnValue>(error::IOReturnValue::OpWouldBlock);
+                }
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
             }
 
@@ -662,7 +668,7 @@ namespace cppnetlib {
             return static_cast<std::size_t>(retv);
         }
 
-        error::ExpectedValue<std::size_t, error::ReceiveError> UDPSocketBase::receiveFrom(TransmitDataT * data, const std::size_t maxSize, Address & address) const {
+        error::ExpectedValue<std::size_t, error::IOReturnValue> UDPSocketBase::receiveFrom(TransmitDataT * data, const std::size_t maxSize, Address & address) const {
             assert(data != nullptr);
             if (!isOpen()) {
                 throw Exception(FUNC_NAME + ": Could not send data, because the socket is not open");
@@ -680,7 +686,7 @@ namespace cppnetlib {
 
             if (retv == SOCKET_OP_UNSUCCESSFUL) {
                 if (platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
-                    return error::makeError<std::size_t, error::ReceiveError>(error::ReceiveError::OpWouldBlock);
+                    return error::makeError<std::size_t, error::IOReturnValue>(error::IOReturnValue::OpWouldBlock);
                 }
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not receive data");
             }
@@ -711,11 +717,11 @@ namespace cppnetlib {
             TCPSocketBase::setBlocked(blocked);
         }
 
-        std::size_t ClientBase<IPProto::TCP>::send(const TransmitDataT * data, const std::size_t size) const {
+        error::ExpectedValue<std::size_t, error::IOReturnValue> ClientBase<IPProto::TCP>::send(const TransmitDataT * data, const std::size_t size) const {
             return TCPSocketBase::send(data, size);
         }
 
-        error::ExpectedValue<std::size_t, error::ReceiveError> ClientBase<IPProto::TCP>::receive(TransmitDataT* data, const std::size_t maxSize) const {
+        error::ExpectedValue<std::size_t, error::IOReturnValue> ClientBase<IPProto::TCP>::receive(TransmitDataT* data, const std::size_t maxSize) const {
             return TCPSocketBase::receive(data, maxSize);
         }
 
@@ -743,11 +749,11 @@ namespace cppnetlib {
             UDPSocketBase::bind(address);
         }
 
-        std::size_t Client<IPProto::UDP>::sendTo(const TransmitDataT * data, const std::size_t size, const Address & address) const {
+        error::ExpectedValue<std::size_t, error::IOReturnValue> Client<IPProto::UDP>::sendTo(const TransmitDataT * data, const std::size_t size, const Address & address) const {
             return UDPSocketBase::sendTo(data, size, address);
         }
 
-        error::ExpectedValue<std::size_t, error::ReceiveError> Client<IPProto::UDP>::receiveFrom(TransmitDataT * data, const std::size_t maxSize, Address & address) const {
+        error::ExpectedValue<std::size_t, error::IOReturnValue> Client<IPProto::UDP>::receiveFrom(TransmitDataT * data, const std::size_t maxSize, Address & address) const {
             return UDPSocketBase::receiveFrom(data, maxSize, address);
         }
     }

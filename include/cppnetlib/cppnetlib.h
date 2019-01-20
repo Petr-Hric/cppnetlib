@@ -41,15 +41,16 @@ namespace cppnetlib {
     // Error namespace
 
     namespace error {
-        enum class ReceiveError {
-            ErrorOccured = 1
-            , OpWouldBlock
+        enum class IOReturnValue {
+            OpWouldBlock
             , GracefullyDisconnected
         };
 
         template <typename ValueT, typename ErrorT>
         class ExpectedValue {
         public:
+            ExpectedValue() = default;
+
             ExpectedValue(ValueT&& value) :
                 mValue(std::move(value)) {}
 
@@ -79,8 +80,6 @@ namespace cppnetlib {
             friend ExpectedValue<OtherValueT, OtherErrorT> makeError(const OtherErrorT& error);
 
         private:
-            ExpectedValue() = default;
-
             bool mHasError = false;
             ValueT mValue;
             ErrorT mError;
@@ -174,9 +173,9 @@ namespace cppnetlib {
 
             void tryAccept(std::function<void(platform::SocketT&&, Address&&)>& onAccept) const;
 
-            std::size_t send(const TransmitDataT* data, const std::size_t size) const;
+            error::ExpectedValue<std::size_t, error::IOReturnValue> send(const TransmitDataT* data, const std::size_t size) const;
 
-            error::ExpectedValue<std::size_t, error::ReceiveError> receive(TransmitDataT* data, const std::size_t maxSize) const;
+            error::ExpectedValue<std::size_t, error::IOReturnValue> receive(TransmitDataT* data, const std::size_t maxSize) const;
         };
 
         class UDPSocketBase : public SocketBase {
@@ -189,9 +188,9 @@ namespace cppnetlib {
 
             virtual void open() override;
 
-            std::size_t sendTo(const TransmitDataT* data, const std::size_t size, const Address& address) const;
+            error::ExpectedValue<std::size_t, error::IOReturnValue> sendTo(const TransmitDataT* data, const std::size_t size, const Address& address) const;
 
-            error::ExpectedValue<std::size_t, error::ReceiveError> receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) const;
+            error::ExpectedValue<std::size_t, error::IOReturnValue> receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) const;
         };
     }
 
@@ -214,9 +213,9 @@ namespace cppnetlib {
 
             void setBlocked(const bool blocked);
 
-            std::size_t send(const TransmitDataT* data, const std::size_t size) const;
+            error::ExpectedValue<std::size_t, error::IOReturnValue> send(const TransmitDataT* data, const std::size_t size) const;
 
-            error::ExpectedValue<std::size_t, error::ReceiveError> receive(TransmitDataT* data, const std::size_t maxSize) const;
+            error::ExpectedValue<std::size_t, error::IOReturnValue> receive(TransmitDataT* data, const std::size_t maxSize) const;
         };
 
         // Client
@@ -245,9 +244,9 @@ namespace cppnetlib {
 
             void bind(const Address& address);
 
-            std::size_t sendTo(const TransmitDataT* data, const std::size_t size, const Address& address) const;
+            error::ExpectedValue<std::size_t, error::IOReturnValue> sendTo(const TransmitDataT* data, const std::size_t size, const Address& address) const;
 
-            error::ExpectedValue<std::size_t, error::ReceiveError> receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) const;
+            error::ExpectedValue<std::size_t, error::IOReturnValue> receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) const;
         };
     }
 
