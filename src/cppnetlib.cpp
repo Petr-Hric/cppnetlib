@@ -96,18 +96,11 @@ namespace cppnetlib {
                     throw Exception(FUNC_NAME + ": All sockets are already closed");
                 }
 
-                bool cleanUp = false;
-                if (winsockSocketCounter == 1) {
-                    cleanUp = true;
-                }
-
                 if (::closesocket(socket) != SOCKET_OP_SUCCESSFUL) {
                     throw  exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
                 }
 
-                --winsockSocketCounter;
-
-                if (cleanUp) {
+                if (--winsockSocketCounter == 0) {
                     if (WSACleanup() != 0) {
                         throw  exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not deinitialize WinSock");
                     }
@@ -300,15 +293,7 @@ namespace cppnetlib {
         }
 
         platform::SockLenT toSockLen(const Address& address) {
-            switch (address.ipVersion()) {
-            case IPVer::IPv4:
-                return sizeof(sockaddr_in);
-            case IPVer::IPv6:
-                return sizeof(sockaddr_in6);
-            default:
-                assert(false);
-                throw Exception(FUNC_NAME + ": Unknown IPVer value");
-            }
+            return toSockLen(address.ipVersion());
         }
 
         IPVer toIPVer(const platform::NativeFamilyT addressFamily) {
@@ -334,18 +319,18 @@ namespace cppnetlib {
 
     // Address
 
-    Address::Address(const Address & other) {
+    Address::Address(const Address& other) {
         *this = other;
     }
 
-    Address::Address(Address && other) {
+    Address::Address(Address&& other) {
         *this = std::move(other);
     }
 
-    Address::Address(const IPVer ipVersion, const IpT & ip, const PortT port) {
+    Address::Address(const IPVer ipVersion, const IpT& ip, const PortT port) {
         assert(ipVersion != IPVer::Unknown);
         mIpVersion = ipVersion;
-        mIp = ip;
+        mIp = ip; // TODO: Validate IP
         mPort = port;
     }
 
@@ -371,7 +356,7 @@ namespace cppnetlib {
         return mIp != other.mIp || mPort != other.mPort;
     }
 
-    const IpT & Address::ip() const {
+    const IpT& Address::ip() const {
         return mIp;
     }
 
@@ -387,16 +372,14 @@ namespace cppnetlib {
         sockaddr sockAddr = {};
 
         switch (address.ipVersion()) {
-        case IPVer::IPv4:
-        {
+        case IPVer::IPv4: {
             sockaddr_in &ipv4addr = reinterpret_cast<sockaddr_in&>(sockAddr);
             ipv4addr.sin_family = helpers::toNativeFamily(address.ipVersion());
             ipv4addr.sin_port = Endian::convertNativeTo(address.port(), Endian::Type::Big);
             platform::nativeInetPton(helpers::toNativeFamily(address.ipVersion()), address.ip().c_str(), &ipv4addr.sin_addr);
             break;
         }
-        case IPVer::IPv6:
-        {
+        case IPVer::IPv6: {
             sockaddr_in6 &ipv6addr = reinterpret_cast<sockaddr_in6&>(sockAddr);
             ipv6addr.sin6_family = helpers::toNativeFamily(address.ipVersion());
             ipv6addr.sin6_port = Endian::convertNativeTo(address.port(), Endian::Type::Big);
@@ -411,8 +394,8 @@ namespace cppnetlib {
 
     Address createAddress(const sockaddr& sockAddr) {
         PortT port;
-
         char ipBuffer[40] = {};
+
         switch (sockAddr.sa_family) {
         case AF_INET:
         {
@@ -439,10 +422,8 @@ namespace cppnetlib {
     namespace error {
         std::string toString(const IOReturnValue value) {
             assert(static_cast<std::size_t>(value) < 3);
-
             static const std::string errorMessage[] = {
-                {"Error occured. Error code can be obtained by calling nativeErrorCode()"}
-                ,{"Operation should be blocked"}
+                {"Operation should be blocked"}
                 ,{"Gracefully disconnected"}
             };
 
@@ -484,7 +465,6 @@ namespace cppnetlib {
             if (!isOpen()) {
                 throw Exception(FUNC_NAME + ": Could not close socket, because the socket is already closed");
             }
-
             platform::nativeSocketClose(mSocket, socketCreatedByUser);
         }
 
@@ -494,7 +474,6 @@ namespace cppnetlib {
             }
 
             const sockaddr sockAddr = createSockAddr(address);
-
             const platform::NetLibRetvT retv = ::bind(mSocket, &sockAddr, helpers::toSockLen(address));
             if (retv == SOCKET_OP_UNSUCCESSFUL) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not bind address to socket");
@@ -507,6 +486,7 @@ namespace cppnetlib {
             if (!isOpen()) {
                 throw Exception(FUNC_NAME + "Socket is not open");
             }
+
             if (!platform::nativeSetBlocked(mSocket, blocked)) {
                 exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not set blocking/non-blocking socket property");
             }
@@ -534,7 +514,6 @@ namespace cppnetlib {
             if (isOpen()) {
                 throw Exception(FUNC_NAME + ": Could not open socket, the socket is already open");
             }
-
             mSocket = platform::nativeSocketOpen(helpers::toNativeFamily(ipVersion()), IPPROTO_TCP);
         }
 
@@ -544,7 +523,6 @@ namespace cppnetlib {
             }
 
             const sockaddr sockAddr = createSockAddr(address);
-
             if (::connect(mSocket, &sockAddr, helpers::toSockLen(address)) != SOCKET_OP_SUCCESSFUL) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not connect to server");
             }
@@ -563,14 +541,12 @@ namespace cppnetlib {
         void TCPSocketBase::tryAccept(std::function<void(platform::SocketT&&, Address&&)>& onAccept) const {
             sockaddr addr = {};
             platform::SockLenT sockLen = helpers::toSockLen(IPVer::IPv6 /*Max sockaddr size*/);
-
             platform::SocketT socket = ::accept(mSocket, &addr, &sockLen);
             if (socket == INVALID_SOCKET_DESCRIPTOR) {
                 if (platform::nativeErrorCode() != CPPNL_OPWOULDBLOCK) {
                     throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not accept client");
                 }
             }
-
             onAccept(std::move(socket), createAddress(addr));
         }
 
@@ -579,12 +555,12 @@ namespace cppnetlib {
             if (!isOpen()) {
                 throw Exception(FUNC_NAME + ": Could not send data, because the socket is not open");
             }
+
             const platform::NetLibRetvT retv = ::send(
                 mSocket
                 , reinterpret_cast<const platform::NativeTransmitDataT*>(data)
                 , static_cast<platform::IoDataSizeT>(std::min<std::size_t>(static_cast<std::size_t>(cMaxTransmitionUnitSize), size))
                 , 0);
-
             if (retv == SOCKET_OP_UNSUCCESSFUL) {
                 if (platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
                     return error::makeError<std::size_t, error::IOReturnValue>(error::IOReturnValue::OpWouldBlock);
@@ -602,6 +578,7 @@ namespace cppnetlib {
             if (!isOpen()) {
                 throw Exception(FUNC_NAME + ": Could not receive data, because the socket is not open");
             }
+
             const platform::NetLibRetvT retv = ::recv(
                 mSocket
                 , reinterpret_cast<platform::NativeTransmitDataT*>(data)
@@ -636,7 +613,6 @@ namespace cppnetlib {
             if (isOpen()) {
                 throw Exception(FUNC_NAME + ": Could not open socket, the socket is already open");
             }
-
             mSocket = platform::nativeSocketOpen(helpers::toNativeFamily(ipVersion()), IPPROTO_UDP);
         }
 
@@ -647,7 +623,6 @@ namespace cppnetlib {
             }
 
             const sockaddr sockAddr = createSockAddr(address);
-
             const platform::NetLibRetvT retv = ::sendto(
                 mSocket
                 , reinterpret_cast<const platform::NativeTransmitDataT*>(data)
