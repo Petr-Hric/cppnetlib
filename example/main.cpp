@@ -27,6 +27,7 @@ void clientThread() {
 
     std::cout << "[ClientSide]: Connecting to " << address.ip() << ":" << address.port() << " ...\n";
 
+    client.openSocket();
     client.connect(address);
 
     char dataBuffer[1024] = {};
@@ -41,6 +42,7 @@ void clientThread() {
 
 int main() {
     server::Server<IPProto::TCP> server(IPVer::IPv4);
+    server.openSocket();
     server.bind({ IPVer::IPv4, "127.0.0.1", 25565U });
     server.listen(255U);
 

@@ -40,7 +40,7 @@ JavaScriptQuotes: Leave
 KeepEmptyLinesAtTheStartOfBlocks: 'false'
 Language: Cpp
 MaxEmptyLinesToKeep: '1'
-NamespaceIndentation: Inner
+NamespaceIndentation: All
 ObjCBlockIndentWidth: '4'
 PointerAlignment: Left
 ReflowComments: 'true'
