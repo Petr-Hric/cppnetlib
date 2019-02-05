@@ -13,8 +13,8 @@ add_library(cppnetlib STATIC
 )
 
 target_include_directories(cppnetlib
-    PUBLIC include
-    PUBLIC include/Endian/include
+    PUBLIC include/
+    PUBLIC include/cppnetlib/Endian/include
 )
 
 if (${platform} STREQUAL "Windows")
