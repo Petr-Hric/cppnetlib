@@ -15,9 +15,9 @@ void client() {
     
     client.connect({IPVer::IPv4, "127.0.0.1", 25565U});
 
-    char dataBuffer[1024] = {};
-    const error::ExpectedValue<std::size_t, error::IOReturnValue> received =
-    client.receive(reinterpret_cast<TransmitDataT*>(dataBuffer), sizeof(dataBuffer) - 1U);
+    char buffer[1024] = {};
+    const error::ExpectedValue<std::size_t, error::IOReturnValue> retv =
+    client.receive(reinterpret_cast<TransmitDataT*>(buffer), sizeof(buffer));
     
     client.closeSocket();
 }
