@@ -13,7 +13,7 @@ void client() {
     client::Client<IPProto::TCP> client(IPVer::IPv4);
     client.openSocket();
     
-    client.connect({IPVer::IPv4, "127.0.0.1", 25565U});
+    client.connect({ IPVer::IPv4, "127.0.0.1", 25565U });
 
     char buffer[1024] = {};
     const error::ExpectedValue<std::size_t, error::IOReturnValue> retv =
