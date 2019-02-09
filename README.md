@@ -8,46 +8,35 @@ TCP / UDP
 
 Sample code:
 ```c++
-#include "cppnetlib/cppnetlib.h"
-
-#include <iostream>
-#include <thread>
-
-using namespace cppnetlib;
-
-std::function<void(client::ClientBase<IPProto::TCP>&&, Address&&)>
-    onAccept([](client::ClientBase<IPProto::TCP>&& client, Address&& address) {
-    static const std::string welcomeMessage = "Welcome to cppnetlib server!";
-    client.send(reinterpret_cast<const TransmitDataT*>(welcomeMessage.c_str()), welcomeMessage.size());
-});
-
-void clientThread() {
+// Client Sample:
+void client() {
     client::Client<IPProto::TCP> client(IPVer::IPv4);
-
     client.openSocket();
+    
     client.connect({IPVer::IPv4, "127.0.0.1", 25565U});
 
     char dataBuffer[1024] = {};
     const error::ExpectedValue<std::size_t, error::IOReturnValue> received =
-        client.receive(reinterpret_cast<TransmitDataT*>(dataBuffer), sizeof(dataBuffer) - 1U).value();
+    client.receive(reinterpret_cast<TransmitDataT*>(dataBuffer), sizeof(dataBuffer) - 1U);
     
-    std::cout << "[ClientSide]: Received message (Length: " << received.value() << ") - "
-            << dataBuffer << '\n';
+    client.closeSocket();
 }
 
-int main() {
+// Server Sample:
+std::function<void(client::ClientBase<IPProto::TCP>&&, Address&&)>
+    onAccept([](client::ClientBase<IPProto::TCP>&& client, Address&& address) {
+    // Client connected .. do whatever you want!
+});
+
+void server() {
     server::Server<IPProto::TCP> server(IPVer::IPv4);
     server.openSocket();
     
     server.bind({ IPVer::IPv4, "127.0.0.1", 25565U });
     server.listen(255U);
 
-    std::thread t = std::thread(clientThread);
-
     server.tryAccept(onAccept);
-
-    t.join();
-
-    return 0;
+    
+    server.closeSocket();
 }
 ```
