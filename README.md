@@ -18,15 +18,7 @@ using namespace cppnetlib;
 std::function<void(client::ClientBase<IPProto::TCP>&&, Address&&)>
     onAccept([](client::ClientBase<IPProto::TCP>&& client, Address&& address) {
     static const std::string welcomeMessage = "Welcome to cppnetlib server!";
-
-    const error::ExpectedValue<std::size_t, error::IOReturnValue> sent =
-        client.send(reinterpret_cast<const TransmitDataT*>(welcomeMessage.c_str()), welcomeMessage.size());
-    if (!sent.hasError()) {
-        std::cout << "[ServerSide]: Welcome message successfuly sent to "
-            << address.ip() << ":" << address.port() << "\n";
-    } else {
-        std::clog << "[ServerSide]: Error occured during sending data\n";
-    }
+    client.send(reinterpret_cast<const TransmitDataT*>(welcomeMessage.c_str()), welcomeMessage.size());
 });
 
 void clientThread() {
@@ -38,17 +30,15 @@ void clientThread() {
     char dataBuffer[1024] = {};
     const error::ExpectedValue<std::size_t, error::IOReturnValue> received =
         client.receive(reinterpret_cast<TransmitDataT*>(dataBuffer), sizeof(dataBuffer) - 1U).value();
-    if (!received.hasError()) {
-        std::cout << "[ClientSide]: Received message (Length: " << received.value() << ") - "
+    
+    std::cout << "[ClientSide]: Received message (Length: " << received.value() << ") - "
             << dataBuffer << '\n';
-    } else {
-        std::clog << "[ClientSide]: Error occured during receiving data\n";
-    }
 }
 
 int main() {
     server::Server<IPProto::TCP> server(IPVer::IPv4);
     server.openSocket();
+    
     server.bind({ IPVer::IPv4, "127.0.0.1", 25565U });
     server.listen(255U);
 
