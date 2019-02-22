@@ -1,7 +1,7 @@
 #ifndef PLATFORM_H_
 #define PLATFORM_H_
 
-#include "cppnetlib/platformDetect.h"
+#include "Platform/platformDetect.h"
 
 #if defined PLATFORM_WINDOWS
 
@@ -22,8 +22,8 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS_NOT_DEFINED
 #endif
 
-#include <WinSock2.h>
 #include <WS2tcpip.h>
+#include <WinSock2.h>
 
 #ifndef NOMINMAX_NOT_DEFINED
 #undef NOMINMAX
@@ -62,18 +62,15 @@ namespace cppnetlib {
 #else
         using NativeFamilyT = short;
 #endif
-        using SockLenT = socklen_t;
+        using SockLenT = int;
         using NativeTransmitDataT = char;
-    }
-}
+    } // namespace platform
+} // namespace cppnetlib
 
 #elif defined PLATFORM_LINUX
 
-#include <cerrno>
-#include <cstring>
-#include <fcntl.h>
-#include <unistd.h>
 #include <arpa/inet.h>
+#include <cerrno>
 
 #define SOCKET_OP_UNSUCCESSFUL -1
 #define INVALID_SOCKET_DESCRIPTOR -1
@@ -89,10 +86,10 @@ namespace cppnetlib {
         using IoDataSizeT = std::size_t;
         using NetLibRetvT = int;
         using NativeFamilyT = int;
-        using SockLenT = socklen_t;
+        using SockLenT = std::size_t;
         using NativeTransmitDataT = char;
-    }
-}
+    } // namespace platform
+} // namespace cppnetlib
 
 #else
 
@@ -104,11 +101,11 @@ namespace cppnetlib {
     namespace error {
         std::string toString(const IOReturnValue value);
         std::string toString(const NativeErrorCodeT value);
-    }
+    } // namespace error
 
     namespace platform {
         inline error::NativeErrorCodeT nativeErrorCode();
     }
-}
+} // namespace cppnetlib
 
 #endif
