@@ -1,6 +1,8 @@
 #ifndef SOCKETBASE_H_
 #define SOCKETBASE_H_
 
+#include "cppnetlib/platformDetect.h"
+
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -14,7 +16,9 @@ namespace cppnetlib {
 
     enum class IPProto : uint32_t { TCP, UDP };
 
-    enum class TimeoutFor { Send, Recieve };
+    enum class TCPTimeoutFor { Send, Recieve, Connect, Accept };
+
+    enum class UDPTimeoutFor { SendTo, ReceiveFrom };
 
     using IpT = std::string;
     using PortT = uint16_t;
@@ -86,15 +90,15 @@ namespace cppnetlib {
     // Platform namespace
 
     namespace platform {
-        #if defined _WIN64
+        #if defined PLATFORM_WINDOWS64
 
         using SocketT = unsigned long long;
 
-        #elif defined _WIN32
+        #elif defined PLATFORM_WINDOWS32
 
         using SocketT = unsigned long;
 
-        #elif defined __linux__
+        #elif defined PLATFORM_LINUX
 
         using SocketT = int;
 
@@ -133,19 +137,26 @@ namespace cppnetlib {
 
             void bind(const Address& address);
 
-            void setBlocked(const bool blocked);
+            bool blocked() const;
 
             bool isSocketOpen() const;
 
             IPVer ipVersion() const;
 
-            void setTimeout(const TimeoutFor timeoutFor, const Timeout timeoutMs);
-
         private:
+            void setBlocked(const bool blocked);
+
             IPVer mIPVersion;
+            bool mBlocked;
 
         protected:
+            enum class OpTimeout { Write, Read };
+
+            void setWriteReadTimeout(const OpTimeout opTimeoutFor, const Timeout timeout);
+
             platform::SocketT mSocket;
+
+            friend class BlockGuard;
         };
 
         class TCPSocketBase : public SocketBase {
@@ -160,32 +171,70 @@ namespace cppnetlib {
 
             void listen(const std::size_t backlogSize);
 
-            void tryAccept(std::function<void(platform::SocketT&&, Address&&)>& onAccept) const;
+            void tryAccept(std::function<void(platform::SocketT&&, Address&&)>& onAccept);
 
             error::ExpectedValue<std::size_t, error::IOReturnValue> send(const TransmitDataT* data,
-                const std::size_t size) const;
+                const std::size_t size);
 
             error::ExpectedValue<std::size_t, error::IOReturnValue> receive(TransmitDataT* data,
-                const std::size_t maxSize) const;
+                const std::size_t maxSize);
 
             virtual void openSocket() override;
+
+            void setTimeout(const TCPTimeoutFor timeoutFor, const Timeout timeoutMs);
+
+            Timeout getSendTimeout() const {
+                return mSendTimeout;
+            }
+
+            Timeout getReceiveTimeout() const {
+                return mRecvTimeout;
+            }
+
+            Timeout getConnectTimeout() const {
+                return mConnectTimeout;
+            }
+
+            Timeout getAcceptTimeout() const {
+                return mAcceptTimeout;
+            }
+
+        private:
+            bool connectAccept(const OpTimeout opTimeoutFor, const Timeout timeout);
+
+            Timeout mSendTimeout;
+            Timeout mRecvTimeout;
+            Timeout mConnectTimeout;
+            Timeout mAcceptTimeout;
         };
 
         class UDPSocketBase : public SocketBase {
         public:
             UDPSocketBase(const IPVer ipVersion);
 
-            UDPSocketBase(const IPVer ipVersion, platform::SocketT&& socket);
-
             virtual ~UDPSocketBase();
 
             virtual void openSocket() override;
 
             error::ExpectedValue<std::size_t, error::IOReturnValue>
-                sendTo(const TransmitDataT* data, const std::size_t size, const Address& address) const;
+                sendTo(const TransmitDataT* data, const std::size_t size, const Address& address);
 
             error::ExpectedValue<std::size_t, error::IOReturnValue>
-                receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) const;
+                receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address);
+
+            void setTimeout(const UDPTimeoutFor timeoutFor, const Timeout timeoutMs);
+
+            Timeout getSendToTimeout() const {
+                return mSendToTimeout;
+            }
+
+            Timeout getReceiveFromTimeout() const {
+                return mRecvFromTimeout;
+            }
+
+        private:
+            Timeout mSendToTimeout;
+            Timeout mRecvFromTimeout;
         };
     } // namespace base
 
@@ -206,17 +255,19 @@ namespace cppnetlib {
 
             virtual ~ClientBase();
 
-            void setBlocked(const bool blocked);
-
-            void setTimeout(const TimeoutFor timeoutFor, const Timeout timeoutMs) {
-                SocketBase::setTimeout(timeoutFor, timeoutMs);
-            }
-
             error::ExpectedValue<std::size_t, error::IOReturnValue> send(const TransmitDataT* data,
-                const std::size_t size) const;
+                const std::size_t size);
 
             error::ExpectedValue<std::size_t, error::IOReturnValue> receive(TransmitDataT* data,
-                const std::size_t maxSize) const;
+                const std::size_t maxSize);
+
+            bool isSocketOpen() const;
+
+            void setTimeout(const TCPTimeoutFor timeoutFor, const Timeout timeoutMs);
+
+            Timeout getSendTimeout() const;
+
+            Timeout getReceiveTimeout() const;
         };
 
         // Client
@@ -233,9 +284,15 @@ namespace cppnetlib {
 
             void connect(const Address& address);
 
-            void closeSocket() { ClientBase::closeSocket(); }
+            bool isSocketOpen() const;
 
-            void openSocket() { ClientBase::openSocket(); }
+            void closeSocket();
+
+            void openSocket();
+
+            void setConnectTimeout(const Timeout timeoutMs);
+
+            Timeout getConnectTimeout() const;
         };
 
         template <>
@@ -245,23 +302,25 @@ namespace cppnetlib {
 
             virtual ~Client();
 
-            void setBlocked(const bool blocked);
-
-            void setTimeout(const TimeoutFor timeoutFor, const Timeout timeoutMs) {
-                SocketBase::setTimeout(timeoutFor, timeoutMs);
-            }
-
             void bind(const Address& address);
 
             error::ExpectedValue<std::size_t, error::IOReturnValue>
-                sendTo(const TransmitDataT* data, const std::size_t size, const Address& address) const;
+                sendTo(const TransmitDataT* data, const std::size_t size, const Address& address);
 
             error::ExpectedValue<std::size_t, error::IOReturnValue>
-                receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) const;
+                receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address);
 
-            void closeSocket() { UDPSocketBase::closeSocket(); }
+            bool isSocketOpen() const;
 
-            void openSocket() { UDPSocketBase::openSocket(); }
+            void closeSocket();
+
+            void openSocket();
+
+            void setTimeout(const UDPTimeoutFor timeoutFor, const Timeout timeoutMs);
+
+            Timeout getSendToTimeout() const;
+
+            Timeout getReceiveTimeout() const;
         };
     } // namespace client
 
@@ -280,30 +339,30 @@ namespace cppnetlib {
 
             virtual ~Server();
 
-            void setBlocked(const bool blocked);
-
-            void setTimeout(const TimeoutFor timeoutFor, const Timeout timeoutMs) {
-                SocketBase::setTimeout(timeoutFor, timeoutMs);
-            }
-
             void bind(const Address& address);
 
             void listen(const std::size_t backlogSize);
 
             void tryAccept(
-                std::function<void(client::ClientBase<IPProto::TCP>&&, Address&& address)>& onAccept) const;
+                std::function<void(client::ClientBase<IPProto::TCP>&&, Address&& address)>& onAccept);
 
-            bool isSocketOpen() const { return TCPSocketBase::isSocketOpen(); }
+            bool isSocketOpen() const;
 
             void closeSocket();
 
             void openSocket();
+
+            void setAcceptTimeout(const Timeout timeoutMs);
+
+            Timeout getAcceptTimeout() const;
         };
 
         template <>
         class Server<IPProto::UDP> : public client::Client<IPProto::UDP> {
         public:
             Server(const IPVer ipVersion);
+
+            bool isSocketOpen() const;
 
             void closeSocket();
 

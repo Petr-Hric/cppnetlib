@@ -1,7 +1,20 @@
 #ifndef PLATFORM_H_
 #define PLATFORM_H_
 
-#include "cppnetlib/platformDetect.h"
+#if defined _WIN32 || defined _WIN64
+#define PLATFORM_WINDOWS
+
+#if defined _WIN32
+#define PLATFORM_WINDOWS32
+#elif defined _WIN64
+#define PLATFORM_WINDOWS64
+#endif
+
+#elif defined __linux__
+#define PLATFORM_LINUX
+#else
+#error Unsupported platform!
+#endif
 
 #if defined PLATFORM_WINDOWS
 
@@ -62,7 +75,7 @@ namespace cppnetlib {
 #else
         using NativeFamilyT = short;
 #endif
-        using SockLenT = socklen_t;
+        using SockLenT = int;
         using NativeTransmitDataT = char;
     }
 }
@@ -70,9 +83,6 @@ namespace cppnetlib {
 #elif defined PLATFORM_LINUX
 
 #include <cerrno>
-#include <cstring>
-#include <fcntl.h>
-#include <unistd.h>
 #include <arpa/inet.h>
 
 #define SOCKET_OP_UNSUCCESSFUL -1
@@ -89,7 +99,7 @@ namespace cppnetlib {
         using IoDataSizeT = std::size_t;
         using NetLibRetvT = int;
         using NativeFamilyT = int;
-        using SockLenT = socklen_t;
+        using SockLenT = std::size_t;
         using NativeTransmitDataT = char;
     }
 }
