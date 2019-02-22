@@ -144,13 +144,13 @@ namespace cppnetlib {
             IPVer ipVersion() const;
 
         private:
-            void setBlocked(const bool blocked);
-
             IPVer mIPVersion;
             bool mBlocked;
 
         protected:
             enum class OpTimeout { Write, Read };
+
+            void setBlocked(const bool blocked);
 
             void setWriteReadTimeout(const OpTimeout opTimeoutFor, const Timeout timeout);
 
@@ -200,7 +200,7 @@ namespace cppnetlib {
             }
 
         private:
-            bool connectAccept(const OpTimeout opTimeoutFor, const Timeout timeout);
+            bool connectAcceptTimeout(const OpTimeout opTimeoutFor, const Timeout timeout);
 
             Timeout mSendTimeout;
             Timeout mRecvTimeout;

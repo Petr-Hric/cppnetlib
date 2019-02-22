@@ -475,14 +475,12 @@ namespace cppnetlib {
 
         SocketBase::SocketBase(const IPVer ipVersion)
             : mIPVersion(ipVersion)
-            , mBlocked(true)
-            , mSocket(INVALID_SOCKET_DESCRIPTOR) {
-            setBlocked(false);
-        }
+            , mBlocked(false)
+            , mSocket(INVALID_SOCKET_DESCRIPTOR) {}
 
         SocketBase::SocketBase(const IPVer ipVersion, platform::SocketT socket)
             : mIPVersion(ipVersion)
-            , mBlocked(true)
+            , mBlocked(false)
             , mSocket(socket) {
             setBlocked(false);
         }
@@ -531,13 +529,15 @@ namespace cppnetlib {
 
         void SocketBase::setBlocked(const bool blocked) {
             if (!isSocketOpen()) {
-                throw Exception(FUNC_NAME + "Socket is not open");
+                throw Exception(FUNC_NAME + ": Socket is not open");
             }
 
             if (!platform::nativeSetBlocked(mSocket, blocked)) {
                 exception::ExceptionWithSystemErrorMessage(
                     FUNC_NAME, "Could not set blocking/non-blocking socket property");
             }
+
+            mBlocked = blocked;
         }
 
         bool SocketBase::blocked() const {
@@ -549,6 +549,10 @@ namespace cppnetlib {
         IPVer SocketBase::ipVersion() const { return mIPVersion; }
 
         void SocketBase::setWriteReadTimeout(const OpTimeout opTimeoutFor, const Timeout timeout) {
+            if (!isSocketOpen()) {
+                throw Exception(FUNC_NAME + ": Could not set write/read timeout, because the socket is not open");
+            }
+
             #if defined PLATFORM_WINDOWS
             switch (opTimeoutFor) {
                 case OpTimeout::Write:
@@ -611,6 +615,8 @@ namespace cppnetlib {
                 throw Exception(FUNC_NAME + ": Could not open socket, the socket is already open");
             }
             mSocket = platform::nativeSocketOpen(helpers::toNativeFamily(ipVersion()), IPPROTO_TCP);
+
+            setBlocked(false);
         }
 
         void TCPSocketBase::connect(const Address& address) {
@@ -623,7 +629,7 @@ namespace cppnetlib {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not connect to the server");
             }
 
-            if (getConnectTimeout() > 0 && connectAccept(OpTimeout::Write, getConnectTimeout())) {
+            if (getConnectTimeout() > 0 && connectAcceptTimeout(OpTimeout::Write, getConnectTimeout())) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Connect timeout");
             }
         }
@@ -645,7 +651,7 @@ namespace cppnetlib {
         void TCPSocketBase::tryAccept(std::function<void(platform::SocketT&&, Address&&)>& onAccept) {
             sockaddr addr = {};
 
-            if (connectAccept(OpTimeout::Read, mAcceptTimeout)) {
+            if (connectAcceptTimeout(OpTimeout::Read, mAcceptTimeout)) {
                 return;
             }
 
@@ -741,7 +747,11 @@ namespace cppnetlib {
             }
         }
 
-        bool TCPSocketBase::connectAccept(const OpTimeout selectTimeoutFor, const Timeout timeout) {
+        bool TCPSocketBase::connectAcceptTimeout(const OpTimeout selectTimeoutFor, const Timeout timeout) {
+            if (!isSocketOpen()) {
+                throw Exception(FUNC_NAME + ": Could not perform connect/accept timeout, because the socket is not open");
+            }
+
             fd_set fdSet;
             fd_set* fdWritePtr = nullptr;
             fd_set* fdReadPtr = nullptr;
@@ -789,6 +799,8 @@ namespace cppnetlib {
                 throw Exception(FUNC_NAME + ": Could not open socket, the socket is already open");
             }
             mSocket = platform::nativeSocketOpen(helpers::toNativeFamily(ipVersion()), IPPROTO_UDP);
+
+            setBlocked(false);
         }
 
         error::ExpectedValue<std::size_t, error::IOReturnValue>
