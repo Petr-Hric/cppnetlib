@@ -61,7 +61,36 @@ namespace cppnetlib {
     } // namespace error
 
     namespace platform {
-        static std::size_t winsockSocketCounter = 0U;
+        class WinsockManager {
+        public:
+            static void init() {
+                if (mWinsockSocketCounter == 0U) {
+                    WSAData wsad;
+                    if (WSAStartup(WS_VERSION, &wsad) != 0) {
+                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                                                                         "Could not initialize WinSock");
+                    }
+                }
+                ++mWinsockSocketCounter;
+            }
+
+            static void uninit() {
+                if (mWinsockSocketCounter > 0) {
+                    if (mWinsockSocketCounter == 1) {
+                        if (WSACleanup() != 0) {
+                            throw exception::ExceptionWithSystemErrorMessage(
+                                FUNC_NAME, "Could not deinitialize WinSock");
+                        }
+                    }
+                    --mWinsockSocketCounter;
+                }
+            }
+
+        private:
+            static std::size_t mWinsockSocketCounter;
+        };
+
+        std::size_t WinsockManager::mWinsockSocketCounter = 0;
 
         inline error::NativeErrorCodeT nativeErrorCode() { return WSAGetLastError(); }
 
@@ -69,13 +98,7 @@ namespace cppnetlib {
             static std::mutex mtx;
             std::lock_guard<std::mutex> lock(mtx);
 
-            if (winsockSocketCounter == 0U) {
-                WSAData wsad;
-                if (WSAStartup(WS_VERSION, &wsad) != 0) {
-                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                     "Could not initialize WinSock");
-                }
-            }
+            WinsockManager::init();
 
             int type = 0;
             switch (ipProtocol) {
@@ -95,8 +118,6 @@ namespace cppnetlib {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not open socket");
             }
 
-            ++winsockSocketCounter;
-
             return socket;
         }
 
@@ -105,20 +126,11 @@ namespace cppnetlib {
             std::lock_guard<std::mutex> lock(mtx);
 
             if (createdByUser) {
-                if (winsockSocketCounter == 0) {
-                    throw Exception(FUNC_NAME + ": All sockets are already closed");
-                }
-
                 if (::closesocket(socket) != SOCKET_OP_SUCCESSFUL) {
                     throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
                 }
 
-                if (--winsockSocketCounter == 0) {
-                    if (WSACleanup() != 0) {
-                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                         "Could not deinitialize WinSock");
-                    }
-                }
+                WinsockManager::uninit();
             } else {
                 if (::closesocket(socket) != SOCKET_OP_SUCCESSFUL) {
                     throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
@@ -146,6 +158,8 @@ namespace cppnetlib {
             sockaddr_storage sockAddrStorage = {};
             sockAddrStorage.ss_family = addressFamily;
 
+            WinsockManager::init();
+
             char buffer[16] = {};
             switch (addressFamily) {
             case AF_INET:
@@ -167,6 +181,7 @@ namespace cppnetlib {
                               &reinterpret_cast<sockaddr_in6*>(&sockAddrStorage)->sin6_addr));
                 break;
             default:
+                WinsockManager::uninit();
                 throw exception::UnknownAddressFamilyException();
             }
 
@@ -175,9 +190,11 @@ namespace cppnetlib {
                                     nullptr,
                                     dst,
                                     &s) != 0) {
+                WinsockManager::uninit();
                 throw exception::ExceptionWithSystemErrorMessage(
                     FUNC_NAME, "Could not convert address to human readable format");
             }
+            WinsockManager::uninit();
         }
 
         // For older Winsock2 versions
@@ -191,6 +208,8 @@ namespace cppnetlib {
 
             std::copy(src, src + INET6_ADDRSTRLEN + 1U, scrCopy);
 
+            WinsockManager::init();
+
             if (WSAStringToAddressA(
                     scrCopy, addressFamily, nullptr, (struct sockaddr*)&sockAddrStorage, &size) == 0) {
                 switch (addressFamily) {
@@ -203,12 +222,15 @@ namespace cppnetlib {
                         (reinterpret_cast<sockaddr_in6*>(&sockAddrStorage))->sin6_addr;
                     break;
                 default:
+                    WinsockManager::uninit();
                     throw exception::UnknownAddressFamilyException();
                 }
             } else {
+                WinsockManager::uninit();
                 throw exception::ExceptionWithSystemErrorMessage(
                     FUNC_NAME, "Could not convert address to network format");
             }
+            WinsockManager::uninit();
         }
     } // namespace platform
 
@@ -326,7 +348,7 @@ namespace cppnetlib {
             }
         }
 
-        platform::SockLenT toSockLen(const Address& address) { return toSockLen(address.ipVersion()); }
+        platform::SockLenT toSockLen(const Address& address) { return toSockLen(address.ip().version()); }
 
         IPVer toIPVer(const platform::NativeFamilyT addressFamily) {
             switch (addressFamily) {
@@ -347,30 +369,103 @@ namespace cppnetlib {
 
     const std::string& Exception::message() const { return mMessage; }
 
+    // Ip
+
+    Ip::Ip()
+        : mIpVer(IPVer::Unknown) {}
+
+    Ip::Ip(const char* ip)
+        : mIpVer(IPVer::Unknown) {
+        assert(ip != nullptr);
+        *this = ip;
+    }
+
+    Ip::Ip(const std::string& ip)
+        : mIpVer(IPVer::Unknown) {
+        *this = ip;
+    }
+
+    const std::string& Ip::string() const { return mIpStr; }
+
+    IPVer Ip::version() const { return mIpVer; }
+
+    bool Ip::operator==(const Ip& other) const { return mIpStr == other.mIpStr; }
+
+    bool Ip::operator!=(const Ip& other) const { return !(mIpStr == other.mIpStr); }
+
+    Ip& Ip::operator=(const Ip& other) {
+        mIpVer = other.mIpVer;
+        mIpStr = other.mIpStr;
+        return *this;
+    }
+
+    Ip& Ip::operator=(Ip&& other) {
+        mIpVer = std::exchange(other.mIpVer, IPVer::Unknown);
+        mIpStr = std::move(other.mIpStr);
+        return *this;
+    }
+
+    Ip& Ip::operator=(const char* ip) {
+        assert(ip != nullptr);
+        return this->operator=(std::string(ip));
+    }
+
+    Ip& Ip::operator=(const std::string& ip) {
+        if (ip.empty()) {
+            mIpStr.clear();
+        } else {
+            if (isIpV4Addr(ip)) {
+                mIpVer = IPVer::IPv4;
+            } else if (isIpV6Addr(ip)) {
+                mIpVer = IPVer::IPv6;
+            } else {
+                throw Exception("Invalid IP format");
+            }
+            mIpStr = ip;
+        }
+        return *this;
+    }
+
+    bool Ip::isIpV4Addr(const std::string& ip) {
+        struct sockaddr_in sa;
+        try {
+            platform::nativeInetPton(AF_INET, ip.c_str(), &sa);
+        } catch (const exception::UnknownAddressFamilyException&) {
+            return false;
+        }
+        return true;
+    }
+
+    bool Ip::isIpV6Addr(const std::string& ip) {
+        struct sockaddr_in6 sa;
+        try {
+            platform::nativeInetPton(AF_INET6, ip.c_str(), &sa);
+        } catch (const exception::UnknownAddressFamilyException&) {
+            return false;
+        }
+        return true;
+    }
+
     // Address
 
     Address::Address(const Address& other) { *this = other; }
 
     Address::Address(Address&& other) { *this = std::move(other); }
 
-    Address::Address(const IPVer ipVersion, const IpT& ip, const PortT port) {
-        assert(ipVersion != IPVer::Unknown);
-        mIpVersion = ipVersion;
-        mIp = ip; // TODO: Validate IP
+    Address::Address(const Ip& ip, const PortT port) {
+        mIp = ip;
         mPort = port;
     }
 
     Address& Address::operator=(const Address& other) {
         mIp = other.mIp;
         mPort = other.mPort;
-        mIpVersion = other.mIpVersion;
         return *this;
     }
 
     Address& Address::operator=(Address&& other) {
         mIp = std::move(other.mIp);
         mPort = std::move(other.mPort);
-        mIpVersion = std::move(other.mIpVersion);
         return *this;
     }
 
@@ -378,30 +473,30 @@ namespace cppnetlib {
 
     bool Address::operator!=(const Address& other) const { return mIp != other.mIp || mPort != other.mPort; }
 
-    const IpT& Address::ip() const { return mIp; }
+    const Ip& Address::ip() const { return mIp; }
 
     PortT Address::port() const { return mPort; }
-
-    IPVer Address::ipVersion() const { return mIpVersion; }
 
     sockaddr createSockAddr(const Address& address) {
         sockaddr sockAddr = {};
 
-        switch (address.ipVersion()) {
+        switch (address.ip().version()) {
         case IPVer::IPv4: {
             sockaddr_in& ipv4addr = reinterpret_cast<sockaddr_in&>(sockAddr);
-            ipv4addr.sin_family = helpers::toNativeFamily(address.ipVersion());
+            ipv4addr.sin_family = helpers::toNativeFamily(address.ip().version());
             ipv4addr.sin_port = Endian::convertNativeTo(address.port(), Endian::Type::Big);
-            platform::nativeInetPton(
-                helpers::toNativeFamily(address.ipVersion()), address.ip().c_str(), &ipv4addr.sin_addr);
+            platform::nativeInetPton(helpers::toNativeFamily(address.ip().version()),
+                                     address.ip().string().c_str(),
+                                     &ipv4addr.sin_addr);
             break;
         }
         case IPVer::IPv6: {
             sockaddr_in6& ipv6addr = reinterpret_cast<sockaddr_in6&>(sockAddr);
-            ipv6addr.sin6_family = helpers::toNativeFamily(address.ipVersion());
+            ipv6addr.sin6_family = helpers::toNativeFamily(address.ip().version());
             ipv6addr.sin6_port = Endian::convertNativeTo(address.port(), Endian::Type::Big);
-            platform::nativeInetPton(
-                helpers::toNativeFamily(address.ipVersion()), address.ip().c_str(), &ipv6addr.sin6_addr);
+            platform::nativeInetPton(helpers::toNativeFamily(address.ip().version()),
+                                     address.ip().string().c_str(),
+                                     &ipv6addr.sin6_addr);
             break;
         }
         default:
@@ -430,7 +525,7 @@ namespace cppnetlib {
         default:
             throw exception::UnknownAddressFamilyException();
         }
-        return Address(helpers::toIPVer(sockAddr.sa_family), ipBuffer, port);
+        return Address(ipBuffer, port);
     }
 
     // Error
@@ -469,14 +564,12 @@ namespace cppnetlib {
             const bool mWasBlocked;
         };
 
-        SocketBase::SocketBase(const IPVer ipVersion)
-            : mIPVersion(ipVersion)
-            , mBlocked(false)
+        SocketBase::SocketBase()
+            : mBlocking(false)
             , mSocket(INVALID_SOCKET_DESCRIPTOR) {}
 
-        SocketBase::SocketBase(const IPVer ipVersion, platform::SocketT socket)
-            : mIPVersion(ipVersion)
-            , mBlocked(false)
+        SocketBase::SocketBase(platform::SocketT socket)
+            : mBlocking(false)
             , mSocket(socket) {
             setBlocked(false);
         }
@@ -486,21 +579,20 @@ namespace cppnetlib {
         SocketBase::~SocketBase() {
             try {
                 if (this->isSocketOpen()) {
-                    this->closeSocket();
+                    this->close();
                 }
             } catch (...) {
             }
         }
 
         SocketBase& SocketBase::operator=(SocketBase&& other) {
-            mIPVersion = other.mIPVersion;
             mSocket = std::move(other.mSocket);
             other.mSocket = INVALID_SOCKET_DESCRIPTOR;
-            mBlocked = other.mBlocked;
+            mBlocking = other.mBlocking;
             return *this;
         }
 
-        void SocketBase::closeSocket(const bool socketCreatedByUser) {
+        void SocketBase::close(const bool socketCreatedByUser) {
             if (!isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not close socket, because the socket is already closed");
             }
@@ -509,8 +601,7 @@ namespace cppnetlib {
 
         void SocketBase::bind(const Address& address) {
             if (!isSocketOpen()) {
-                throw Exception(FUNC_NAME +
-                                ": Could not bind address to socket, because the socket is not open");
+                openSocket(address.ip().version());
             }
 
             const sockaddr sockAddr = createSockAddr(address);
@@ -533,14 +624,12 @@ namespace cppnetlib {
                     FUNC_NAME, "Could not set blocking/non-blocking socket property");
             }
 
-            mBlocked = blocked;
+            mBlocking = blocked;
         }
 
-        bool SocketBase::blocked() const { return mBlocked; }
+        bool SocketBase::blocked() const { return mBlocking; }
 
         bool SocketBase::isSocketOpen() const { return mSocket != INVALID_SOCKET_DESCRIPTOR; }
-
-        IPVer SocketBase::ipVersion() const { return mIPVersion; }
 
         void SocketBase::setWriteReadTimeout(const OpTimeout opTimeoutFor, const Timeout timeout) {
             if (!isSocketOpen()) {
@@ -595,15 +684,15 @@ namespace cppnetlib {
 #endif
         }
 
-        TCPSocketBase::TCPSocketBase(const IPVer ipVersion)
-            : SocketBase(ipVersion)
+        TCPSocketBase::TCPSocketBase()
+            : SocketBase()
             , mSendTimeout(DEFAULT_TCP_SEND_TIMEOUT)
             , mRecvTimeout(DEFAULT_TCP_RECV_TIMEOUT)
             , mConnectTimeout(DEFAULT_TCP_CONNECT_TIMEOUT)
             , mAcceptTimeout(DEFAULT_TCP_ACCEPT_TIMEOUT) {}
 
-        TCPSocketBase::TCPSocketBase(const IPVer ipVersion, platform::SocketT&& socket)
-            : SocketBase(ipVersion, std::move(socket))
+        TCPSocketBase::TCPSocketBase(platform::SocketT&& socket)
+            : SocketBase(std::move(socket))
             , mSendTimeout(DEFAULT_TCP_SEND_TIMEOUT)
             , mRecvTimeout(DEFAULT_TCP_RECV_TIMEOUT)
             , mConnectTimeout(DEFAULT_TCP_CONNECT_TIMEOUT)
@@ -613,19 +702,18 @@ namespace cppnetlib {
 
         TCPSocketBase::~TCPSocketBase() {}
 
-        void TCPSocketBase::openSocket() {
+        void TCPSocketBase::openSocket(const IPVer ipVer) {
             if (isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not open socket, the socket is already open");
             }
-            mSocket = platform::nativeSocketOpen(helpers::toNativeFamily(ipVersion()), IPPROTO_TCP);
+            mSocket = platform::nativeSocketOpen(helpers::toNativeFamily(ipVer), IPPROTO_TCP);
 
             setBlocked(false);
         }
 
         void TCPSocketBase::connect(const Address& address) {
             if (!isSocketOpen()) {
-                throw Exception(FUNC_NAME +
-                                ": Could not connect to the server, because the socket is not open");
+                openSocket(address.ip().version());
             }
 
             const sockaddr sockAddr = createSockAddr(address);
@@ -794,18 +882,18 @@ namespace cppnetlib {
             return false;
         }
 
-        UDPSocketBase::UDPSocketBase(const IPVer ipVersion)
-            : SocketBase(ipVersion)
+        UDPSocketBase::UDPSocketBase()
+            : SocketBase()
             , mSendToTimeout(DEFAULT_UDP_SENDTO_TIMEOUT)
             , mRecvFromTimeout(DEFAULT_UDP_RECVFROM_TIMEOUT) {}
 
         UDPSocketBase::~UDPSocketBase() {}
 
-        void UDPSocketBase::openSocket() {
+        void UDPSocketBase::openSocket(const IPVer ipVer) {
             if (isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not open socket, the socket is already open");
             }
-            mSocket = platform::nativeSocketOpen(helpers::toNativeFamily(ipVersion()), IPPROTO_UDP);
+            mSocket = platform::nativeSocketOpen(helpers::toNativeFamily(ipVer), IPPROTO_UDP);
 
             setBlocked(false);
         }
@@ -813,8 +901,9 @@ namespace cppnetlib {
         error::ExpectedValue<std::size_t, error::IOReturnValue>
         UDPSocketBase::sendTo(const TransmitDataT* data, const std::size_t size, const Address& address) {
             assert(data != nullptr);
+
             if (!isSocketOpen()) {
-                throw Exception(FUNC_NAME + ": Could not send data, because the socket is not open");
+                openSocket(address.ip().version());
             }
 
             BlockGuard guard(*this);
@@ -845,14 +934,15 @@ namespace cppnetlib {
         error::ExpectedValue<std::size_t, error::IOReturnValue>
         UDPSocketBase::receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) {
             assert(data != nullptr);
+
             if (!isSocketOpen()) {
-                throw Exception(FUNC_NAME + ": Could not send data, because the socket is not open");
+                openSocket(address.ip().version());
             }
 
             BlockGuard guard(*this);
 
             sockaddr sockAddr = {};
-            platform::SockLenT sockLen = helpers::toSockLen(ipVersion());
+            platform::SockLenT sockLen = helpers::toSockLen(IPVer::IPv6);
             const platform::NetLibRetvT retv =
                 ::recvfrom(mSocket,
                            reinterpret_cast<platform::NativeTransmitDataT*>(data),
@@ -897,11 +987,11 @@ namespace cppnetlib {
     // Client namespace
 
     namespace client {
-        ClientBase<IPProto::TCP>::ClientBase(const IPVer ipVersion)
-            : TCPSocketBase(ipVersion) {}
+        ClientBase<IPProto::TCP>::ClientBase()
+            : TCPSocketBase() {}
 
-        ClientBase<IPProto::TCP>::ClientBase(const IPVer ipVersion, platform::SocketT&& socket)
-            : TCPSocketBase(ipVersion, std::move(socket)) {}
+        ClientBase<IPProto::TCP>::ClientBase(platform::SocketT&& socket)
+            : TCPSocketBase(std::move(socket)) {}
 
         ClientBase<IPProto::TCP>::~ClientBase() {}
 
@@ -925,8 +1015,8 @@ namespace cppnetlib {
             return TCPSocketBase::getReceiveTimeout();
         }
 
-        Client<IPProto::TCP>::Client(const IPVer ipVersion)
-            : ClientBase(ipVersion) {}
+        Client<IPProto::TCP>::Client()
+            : ClientBase() {}
 
         Client<IPProto::TCP>::~Client() {}
 
@@ -934,9 +1024,7 @@ namespace cppnetlib {
 
         bool Client<IPProto::TCP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }
 
-        void Client<IPProto::TCP>::closeSocket() { ClientBase::closeSocket(); }
-
-        void Client<IPProto::TCP>::openSocket() { ClientBase::openSocket(); }
+        void Client<IPProto::TCP>::close() { ClientBase::close(); }
 
         void Client<IPProto::TCP>::setConnectTimeout(const Timeout timeoutMs) {
             ClientBase::setTimeout(TCPTimeoutFor::Connect, timeoutMs);
@@ -944,12 +1032,12 @@ namespace cppnetlib {
 
         Timeout Client<IPProto::TCP>::getConnectTimeout() const { return ClientBase::getConnectTimeout(); }
 
-        Client<IPProto::UDP>::Client(const IPVer ipVersion)
-            : UDPSocketBase(ipVersion) {}
+        Client<IPProto::UDP>::Client()
+            : UDPSocketBase() {}
 
         Client<IPProto::UDP>::~Client() {}
 
-        void Client<IPProto::UDP>::bind(const Address& address) { UDPSocketBase::bind(address); }
+        void Client<IPProto::UDP>::bind(const Address& address) { SocketBase::bind(address); }
 
         error::ExpectedValue<std::size_t, error::IOReturnValue>
         Client<IPProto::UDP>::sendTo(const TransmitDataT* data,
@@ -965,9 +1053,7 @@ namespace cppnetlib {
 
         bool Client<IPProto::UDP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }
 
-        void Client<IPProto::UDP>::closeSocket() { UDPSocketBase::closeSocket(); }
-
-        void Client<IPProto::UDP>::openSocket() { UDPSocketBase::openSocket(); }
+        void Client<IPProto::UDP>::close() { UDPSocketBase::close(); }
 
         void Client<IPProto::UDP>::setTimeout(const UDPTimeoutFor timeoutFor, const Timeout timeoutMs) {
             UDPSocketBase::setTimeout(timeoutFor, timeoutMs);
@@ -983,12 +1069,12 @@ namespace cppnetlib {
     // Server namespace
 
     namespace server {
-        Server<IPProto::TCP>::Server(const IPVer ipVersion)
-            : TCPSocketBase(ipVersion) {}
+        Server<IPProto::TCP>::Server()
+            : TCPSocketBase() {}
 
         Server<IPProto::TCP>::~Server() {}
 
-        void Server<IPProto::TCP>::bind(const Address& address) { TCPSocketBase::bind(address); }
+        void Server<IPProto::TCP>::bind(const Address& address) { SocketBase::bind(address); }
 
         void Server<IPProto::TCP>::listen(const std::size_t backlogSize) {
             TCPSocketBase::listen(backlogSize);
@@ -998,8 +1084,7 @@ namespace cppnetlib {
             std::function<void(client::ClientBase<IPProto::TCP>&&, Address&& address)>& onAccept) {
             static std::function<void(platform::SocketT&&, Address &&)> onAcceptInternal(
                 [&](platform::SocketT&& socket, Address&& address) {
-                    onAccept(client::ClientBase<IPProto::TCP>(address.ipVersion(), std::move(socket)),
-                             std::move(address));
+                    onAccept(client::ClientBase<IPProto::TCP>(std::move(socket)), std::move(address));
                     socket = INVALID_SOCKET_DESCRIPTOR;
                 });
 
@@ -1008,9 +1093,7 @@ namespace cppnetlib {
 
         bool Server<IPProto::TCP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }
 
-        void Server<IPProto::TCP>::closeSocket() { TCPSocketBase::closeSocket(); }
-
-        void Server<IPProto::TCP>::openSocket() { TCPSocketBase::openSocket(); }
+        void Server<IPProto::TCP>::close() { TCPSocketBase::close(); }
 
         void Server<IPProto::TCP>::setAcceptTimeout(const Timeout timeoutMs) {
             TCPSocketBase::setTimeout(TCPTimeoutFor::Accept, timeoutMs);
@@ -1018,13 +1101,11 @@ namespace cppnetlib {
 
         Timeout Server<IPProto::TCP>::getAcceptTimeout() const { return TCPSocketBase::getAcceptTimeout(); }
 
-        Server<IPProto::UDP>::Server(const IPVer ipVersion)
-            : Client(ipVersion) {}
+        Server<IPProto::UDP>::Server()
+            : Client() {}
 
         Server<IPProto::UDP>::~Server() {}
 
-        void Server<IPProto::UDP>::closeSocket() { Client::closeSocket(); }
-
-        void Server<IPProto::UDP>::openSocket() { Client::openSocket(); }
+        void Server<IPProto::UDP>::close() { Client::close(); }
     } // namespace server
 } // namespace cppnetlib

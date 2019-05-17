@@ -20,7 +20,6 @@ namespace cppnetlib {
 
     enum class UDPTimeoutFor { SendTo, ReceiveFrom };
 
-    using IpT = std::string;
     using PortT = uint16_t;
     using TransmittedDataSizeT = std::size_t;
     using TransmitDataT = uint8_t;
@@ -55,14 +54,14 @@ namespace cppnetlib {
 
             bool hasError() const { return mHasError; }
 
-            ValueT value() {
+            ValueT value() const {
                 if (hasError()) {
                     throw Exception(FUNC_NAME + ": There is no value");
                 }
                 return mValue;
             }
 
-            const ErrorT& error() {
+            const ErrorT& error() const{
                 if (!hasError()) {
                     throw Exception(FUNC_NAME + ": There is no error");
                 }
@@ -118,22 +117,20 @@ namespace cppnetlib {
     namespace base {
         class SocketBase {
         public:
-            SocketBase(const IPVer ipVersion);
+            SocketBase();
 
-            SocketBase(const IPVer ipVersion, platform::SocketT socket);
+            SocketBase(platform::SocketT socket);
 
             SocketBase(SocketBase&& other);
+
+            virtual ~SocketBase();
 
             SocketBase& operator=(SocketBase&& other);
 
             SocketBase(const SocketBase&) = delete;
             SocketBase& operator=(const SocketBase&) = delete;
 
-            virtual ~SocketBase();
-
-            virtual void openSocket() = 0;
-
-            void closeSocket(const bool socketCreatedByUser = true);
+            void close(const bool socketCreatedByUser = true);
 
             void bind(const Address& address);
 
@@ -141,11 +138,8 @@ namespace cppnetlib {
 
             bool isSocketOpen() const;
 
-            IPVer ipVersion() const;
-
         private:
-            IPVer mIPVersion;
-            bool mBlocked;
+            bool mBlocking;
 
         protected:
             enum class OpTimeout { Write, Read };
@@ -156,14 +150,17 @@ namespace cppnetlib {
 
             platform::SocketT mSocket;
 
+        protected:
+            virtual void openSocket(const IPVer ipVer) = 0;
+
             friend class BlockGuard;
         };
 
         class TCPSocketBase : public SocketBase {
         public:
-            TCPSocketBase(const IPVer ipVersion);
+            TCPSocketBase();
 
-            TCPSocketBase(const IPVer ipVersion, platform::SocketT&& socket);
+            TCPSocketBase(platform::SocketT&& socket);
 
             virtual ~TCPSocketBase();
 
@@ -179,8 +176,6 @@ namespace cppnetlib {
             error::ExpectedValue<std::size_t, error::IOReturnValue> receive(TransmitDataT* data,
                                                                             const std::size_t maxSize);
 
-            virtual void openSocket() override;
-
             void setTimeout(const TCPTimeoutFor timeoutFor, const Timeout timeoutMs);
 
             Timeout getSendTimeout() const { return mSendTimeout; }
@@ -192,6 +187,8 @@ namespace cppnetlib {
             Timeout getAcceptTimeout() const { return mAcceptTimeout; }
 
         private:
+            void openSocket(const IPVer ipVer) override;
+
             bool connectAcceptTimeout(const OpTimeout opTimeoutFor, const Timeout timeout);
 
             Timeout mSendTimeout;
@@ -202,11 +199,9 @@ namespace cppnetlib {
 
         class UDPSocketBase : public SocketBase {
         public:
-            UDPSocketBase(const IPVer ipVersion);
+            UDPSocketBase();
 
             virtual ~UDPSocketBase();
-
-            virtual void openSocket() override;
 
             error::ExpectedValue<std::size_t, error::IOReturnValue>
             sendTo(const TransmitDataT* data, const std::size_t size, const Address& address);
@@ -221,6 +216,8 @@ namespace cppnetlib {
             Timeout getReceiveFromTimeout() const { return mRecvFromTimeout; }
 
         private:
+            void openSocket(const IPVer ipVer) override;
+
             Timeout mSendToTimeout;
             Timeout mRecvFromTimeout;
         };
@@ -237,9 +234,9 @@ namespace cppnetlib {
         template <>
         class ClientBase<IPProto::TCP> : protected base::TCPSocketBase {
         public:
-            ClientBase(const IPVer ipVersion);
+            ClientBase();
 
-            ClientBase(const IPVer ipVersion, platform::SocketT&& socket);
+            ClientBase(platform::SocketT&& socket);
 
             virtual ~ClientBase();
 
@@ -266,7 +263,7 @@ namespace cppnetlib {
         template <>
         class Client<IPProto::TCP> : public ClientBase<IPProto::TCP> {
         public:
-            Client(const IPVer ipVersion);
+            Client();
 
             virtual ~Client();
 
@@ -274,9 +271,7 @@ namespace cppnetlib {
 
             bool isSocketOpen() const;
 
-            void closeSocket();
-
-            void openSocket();
+            void close();
 
             void setConnectTimeout(const Timeout timeoutMs);
 
@@ -286,7 +281,7 @@ namespace cppnetlib {
         template <>
         class Client<IPProto::UDP> : protected base::UDPSocketBase {
         public:
-            Client(const IPVer ipVersion);
+            Client();
 
             virtual ~Client();
 
@@ -300,9 +295,7 @@ namespace cppnetlib {
 
             bool isSocketOpen() const;
 
-            void closeSocket();
-
-            void openSocket();
+            void close();
 
             void setTimeout(const UDPTimeoutFor timeoutFor, const Timeout timeoutMs);
 
@@ -323,7 +316,7 @@ namespace cppnetlib {
         template <>
         class Server<IPProto::TCP> : private base::TCPSocketBase {
         public:
-            Server(const IPVer ipVersion);
+            Server();
 
             virtual ~Server();
 
@@ -336,9 +329,7 @@ namespace cppnetlib {
 
             bool isSocketOpen() const;
 
-            void closeSocket();
-
-            void openSocket();
+            void close();
 
             void setAcceptTimeout(const Timeout timeoutMs);
 
@@ -348,17 +339,50 @@ namespace cppnetlib {
         template <>
         class Server<IPProto::UDP> : public client::Client<IPProto::UDP> {
         public:
-            Server(const IPVer ipVersion);
+            Server();
+
+            virtual ~Server();
 
             bool isSocketOpen() const;
 
-            void closeSocket();
-
-            void openSocket();
-
-            virtual ~Server();
+            void close();
         };
     } // namespace server
+
+    // Ip
+
+    class Ip {
+    public:
+        Ip();
+
+        Ip(const char* ip);
+
+        Ip(const std::string& ip);
+
+        const std::string& string() const;
+
+        IPVer version() const;
+
+        bool operator==(const Ip& other) const;
+
+        bool operator!=(const Ip& other) const;
+
+        Ip& operator=(const Ip& other);
+
+        Ip& operator=(Ip&& other);
+
+        Ip& operator=(const char* ip);
+
+        Ip& operator=(const std::string& ip);
+
+    private:
+        bool isIpV4Addr(const std::string& ip);
+
+        bool isIpV6Addr(const std::string& ip);
+
+        IPVer mIpVer;
+        std::string mIpStr;
+    };
 
     // Address
 
@@ -370,7 +394,7 @@ namespace cppnetlib {
 
         Address(Address&& other);
 
-        Address(const IPVer ipVersion, const IpT& ip, const PortT port);
+        Address(const Ip& ip, const PortT port);
 
         Address& operator=(const Address& other);
 
@@ -380,16 +404,13 @@ namespace cppnetlib {
 
         bool operator!=(const Address& other) const;
 
-        const IpT& ip() const;
+        const Ip& ip() const;
 
         PortT port() const;
 
-        IPVer ipVersion() const;
-
     private:
-        IpT mIp = "";
+        Ip mIp = "";
         PortT mPort = 0U;
-        IPVer mIpVersion = IPVer::Unknown;
 
         friend class base::SocketBase;
         friend class base::TCPSocketBase;
