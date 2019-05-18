@@ -40,7 +40,7 @@ namespace cppnetlib {
     // Error namespace
 
     namespace error {
-        enum class IOReturnValue { OpWouldBlock, GracefullyDisconnected };
+        enum class IOReturnValue { Successful, OpWouldBlock, GracefullyDisconnected };
 
         template <typename ValueT, typename ErrorT>
         class ExpectedValue {

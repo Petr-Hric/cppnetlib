@@ -55,12 +55,12 @@ int main() {
         server.bind({ "127.0.0.1", 25565U });
         server.listen(255U);
 
-        std::cout << "[ServerSize]: Ready. Waiting for incomming connection ...\n";
+        std::cout << "[ServerSide]: Ready. Waiting for incomming connection ...\n";
 
         std::thread t = std::thread(clientThread);
 
         server.tryAccept(onAccept);
-
+		
         t.join();
     } catch (const Exception& e) {
         std::cout << "Exception caught: " << e.message() << std::endl;
