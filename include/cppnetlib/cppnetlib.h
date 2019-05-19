@@ -61,7 +61,7 @@ namespace cppnetlib {
                 return mValue;
             }
 
-            const ErrorT& error() const{
+            const ErrorT& error() const {
                 if (!hasError()) {
                     throw Exception(FUNC_NAME + ": There is no error");
                 }
@@ -248,6 +248,8 @@ namespace cppnetlib {
 
             bool isSocketOpen() const;
 
+            void close();
+
             void setTimeout(const TCPTimeoutFor timeoutFor, const Timeout timeoutMs);
 
             Timeout getSendTimeout() const;
@@ -270,8 +272,6 @@ namespace cppnetlib {
             void connect(const Address& address);
 
             bool isSocketOpen() const;
-
-            void close();
 
             void setConnectTimeout(const Timeout timeoutMs);
 
@@ -324,8 +324,8 @@ namespace cppnetlib {
 
             void listen(const std::size_t backlogSize) const;
 
-            void
-            tryAccept(const std::function<void(client::ClientBase<IPProto::TCP>&&, Address&& address)>& onAccept) const;
+            void tryAccept(const std::function<void(client::ClientBase<IPProto::TCP>&&, Address&& address)>&
+                               onAccept) const;
 
             bool isSocketOpen() const;
 
@@ -355,6 +355,10 @@ namespace cppnetlib {
     public:
         Ip();
 
+        Ip(const Ip& other);
+
+        Ip(Ip&& other);
+
         Ip(const char* ip);
 
         Ip(const std::string& ip);
@@ -374,6 +378,8 @@ namespace cppnetlib {
         Ip& operator=(const char* ip);
 
         Ip& operator=(const std::string& ip);
+
+        bool operator<(const Ip& other) const;
 
     private:
         static bool isIpV4Addr(const std::string& ip);
@@ -417,5 +423,9 @@ namespace cppnetlib {
         friend class base::UDPSocketBase;
     };
 } // namespace cppnetlib
+
+// Overloaded operators
+
+std::ostream& operator<<(std::ostream& stream, const cppnetlib::Ip& ip);
 
 #endif

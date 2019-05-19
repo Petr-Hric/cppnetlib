@@ -33,8 +33,7 @@
 namespace cppnetlib {
     // Global constants
 
-    static constexpr platform::IoDataSizeT cMaxTransmitionUnitSize =
-        1400;
+    static constexpr platform::IoDataSizeT cMaxTransmitionUnitSize = 1400;
 
     namespace exception {
         class UnknownAddressFamilyException : public Exception {
@@ -50,14 +49,14 @@ namespace cppnetlib {
                             " | Native message - " + error::toString(platform::nativeErrorCode()) + "]") {}
         };
 
-		class ConnectionTimeoutException : public Exception {
+        class ConnectionTimeoutException : public Exception {
         public:
             ConnectionTimeoutException(std::string function)
                 : Exception(function + " -> Connection timeout") {}
         };
     } // namespace exception
 
-	namespace helpers {
+    namespace helpers {
         platform::SockLenT toSockLen(const Address& address);
     }
     sockaddr createSockAddr(const Address& address);
@@ -422,6 +421,14 @@ namespace cppnetlib {
     Ip::Ip()
         : mIpVer(IPVer::Unknown) {}
 
+    Ip::Ip(const Ip& other)
+        : mIpVer(other.mIpVer)
+        , mIpStr(other.mIpStr) {}
+
+    Ip::Ip(Ip&& other)
+        : mIpVer(std::move(other.mIpVer))
+        , mIpStr(std::move(other.mIpStr)) {}
+
     Ip::Ip(const char* ip)
         : mIpVer(IPVer::Unknown) {
         assert(ip != nullptr);
@@ -473,6 +480,8 @@ namespace cppnetlib {
         }
         return *this;
     }
+
+    bool Ip::operator<(const Ip& other) const { return mIpStr < other.mIpStr; }
 
     bool Ip::isIpV4Addr(const std::string& ip) {
         struct sockaddr_in sa;
@@ -793,7 +802,8 @@ namespace cppnetlib {
             }
         }
 
-        void TCPSocketBase::tryAccept(const std::function<void(platform::SocketT&&, Address&&)>& onAccept) const {
+        void
+        TCPSocketBase::tryAccept(const std::function<void(platform::SocketT&&, Address&&)>& onAccept) const {
             sockaddr addr = {};
 
             if (connectAcceptTimeout(OpTimeout::Read, mAcceptTimeout)) {
@@ -892,7 +902,8 @@ namespace cppnetlib {
             }
         }
 
-        bool TCPSocketBase::connectAcceptTimeout(const OpTimeout selectTimeoutFor, const Timeout timeout) const {
+        bool TCPSocketBase::connectAcceptTimeout(const OpTimeout selectTimeoutFor,
+                                                 const Timeout timeout) const {
             if (!isSocketOpen()) {
                 throw Exception(FUNC_NAME +
                                 ": Could not perform connect/accept timeout, because the socket is not open");
@@ -1057,6 +1068,10 @@ namespace cppnetlib {
             return TCPSocketBase::receive(data, maxSize);
         }
 
+        void ClientBase<IPProto::TCP>::close() { SocketBase::close(); }
+
+        bool ClientBase<IPProto::TCP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }
+
         void ClientBase<IPProto::TCP>::setTimeout(const TCPTimeoutFor timeoutFor, const Timeout timeoutMs) {
             TCPSocketBase::setTimeout(timeoutFor, timeoutMs);
         }
@@ -1075,8 +1090,6 @@ namespace cppnetlib {
         void Client<IPProto::TCP>::connect(const Address& address) { TCPSocketBase::connect(address); }
 
         bool Client<IPProto::TCP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }
-
-        void Client<IPProto::TCP>::close() { ClientBase::close(); }
 
         void Client<IPProto::TCP>::setConnectTimeout(const Timeout timeoutMs) {
             ClientBase::setTimeout(TCPTimeoutFor::Connect, timeoutMs);
@@ -1105,7 +1118,7 @@ namespace cppnetlib {
 
         bool Client<IPProto::UDP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }
 
-        void Client<IPProto::UDP>::close() { UDPSocketBase::close(); }
+        void Client<IPProto::UDP>::close() { SocketBase::close(); }
 
         void Client<IPProto::UDP>::setTimeout(const UDPTimeoutFor timeoutFor, const Timeout timeoutMs) {
             UDPSocketBase::setTimeout(timeoutFor, timeoutMs);
@@ -1132,8 +1145,8 @@ namespace cppnetlib {
             TCPSocketBase::listen(backlogSize);
         }
 
-        void Server<IPProto::TCP>::tryAccept(const
-            std::function<void(client::ClientBase<IPProto::TCP>&&, Address&& address)>& onAccept) const {
+        void Server<IPProto::TCP>::tryAccept(const std::function<void(client::ClientBase<IPProto::TCP>&&,
+                                                                      Address&& address)>& onAccept) const {
             static std::function<void(platform::SocketT&&, Address &&)> onAcceptInternal(
                 [&](platform::SocketT&& socket, Address&& address) {
                     onAccept(client::ClientBase<IPProto::TCP>(std::move(socket)), std::move(address));
@@ -1145,7 +1158,7 @@ namespace cppnetlib {
 
         bool Server<IPProto::TCP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }
 
-        void Server<IPProto::TCP>::close() { TCPSocketBase::close(); }
+        void Server<IPProto::TCP>::close() { SocketBase::close(); }
 
         void Server<IPProto::TCP>::setAcceptTimeout(const Timeout timeoutMs) {
             TCPSocketBase::setTimeout(TCPTimeoutFor::Accept, timeoutMs);
@@ -1158,6 +1171,12 @@ namespace cppnetlib {
 
         Server<IPProto::UDP>::~Server() {}
 
-        void Server<IPProto::UDP>::close() { Client::close(); }
+        void Server<IPProto::UDP>::close() { SocketBase::close(); }
     } // namespace server
 } // namespace cppnetlib
+
+// Overloaded operators
+
+std::ostream& operator<<(std::ostream& stream, const cppnetlib::Ip& ip) {
+    return (stream << ip.string());
+}
