@@ -166,9 +166,9 @@ namespace cppnetlib {
 
             void connect(const Address& address);
 
-            void listen(const std::size_t backlogSize);
+            void listen(const std::size_t backlogSize) const;
 
-            void tryAccept(std::function<void(platform::SocketT&&, Address&&)>& onAccept);
+            void tryAccept(const std::function<void(platform::SocketT&&, Address&&)>& onAccept) const;
 
             error::ExpectedValue<std::size_t, error::IOReturnValue> send(const TransmitDataT* data,
                                                                          const std::size_t size);
@@ -189,7 +189,7 @@ namespace cppnetlib {
         private:
             void openSocket(const IPVer ipVer) override;
 
-            bool connectAcceptTimeout(const OpTimeout opTimeoutFor, const Timeout timeout);
+            bool connectAcceptTimeout(const OpTimeout opTimeoutFor, const Timeout timeout) const;
 
             Timeout mSendTimeout;
             Timeout mRecvTimeout;
@@ -322,10 +322,10 @@ namespace cppnetlib {
 
             void bind(const Address& address);
 
-            void listen(const std::size_t backlogSize);
+            void listen(const std::size_t backlogSize) const;
 
             void
-            tryAccept(std::function<void(client::ClientBase<IPProto::TCP>&&, Address&& address)>& onAccept);
+            tryAccept(const std::function<void(client::ClientBase<IPProto::TCP>&&, Address&& address)>& onAccept) const;
 
             bool isSocketOpen() const;
 
@@ -376,9 +376,9 @@ namespace cppnetlib {
         Ip& operator=(const std::string& ip);
 
     private:
-        bool isIpV4Addr(const std::string& ip);
+        static bool isIpV4Addr(const std::string& ip);
 
-        bool isIpV6Addr(const std::string& ip);
+        static bool isIpV6Addr(const std::string& ip);
 
         IPVer mIpVer;
         std::string mIpStr;

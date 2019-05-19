@@ -1,28 +1,9 @@
-#include "cppnetlib/cppnetlib.h"
+#include <cppnetlib/cppnetlib.h>
 
 #include <iostream>
 #include <thread>
 
 using namespace cppnetlib;
-
-std::function<void(client::ClientBase<IPProto::TCP>&&, Address&&)>
-    onAccept([](client::ClientBase<IPProto::TCP>&& client, Address&& address) {
-        static const std::string welcomeMessage = "Welcome to cppnetlib server!";
-
-        std::cout << "[ServerSide]: Client " << address.ip().string() << ":" << address.port()
-                  << " connected!\n"
-                  << "[ServerSide]: Sending welcome message to " << address.ip().string() << ":"
-                  << address.port() << " ...\n";
-
-        const error::ExpectedValue<std::size_t, error::IOReturnValue> sent = client.send(
-            reinterpret_cast<const TransmitDataT*>(welcomeMessage.c_str()), welcomeMessage.size());
-        if (!sent.hasError()) {
-            std::cout << "[ServerSide]: Welcome message successfuly sent to " << address.ip().string() << ":"
-                      << address.port() << "\n";
-        } else {
-            std::clog << "[ServerSide]: Error occured during sending data\n";
-        }
-    });
 
 void clientThread() {
     try {
@@ -51,6 +32,24 @@ void clientThread() {
 
 int main() {
     try {
+        static auto onAccept = [](client::ClientBase<IPProto::TCP>&& client, Address&& address) -> void {
+            static const std::string welcomeMessage = "Welcome to cppnetlib server!";
+
+            std::cout << "[ServerSide]: Client " << address.ip().string() << ":" << address.port()
+                      << " connected!\n"
+                      << "[ServerSide]: Sending welcome message to " << address.ip().string() << ":"
+                      << address.port() << " ...\n";
+
+            const error::ExpectedValue<std::size_t, error::IOReturnValue> sent = client.send(
+                reinterpret_cast<const TransmitDataT*>(welcomeMessage.c_str()), welcomeMessage.size());
+            if (!sent.hasError()) {
+                std::cout << "[ServerSide]: Welcome message successfuly sent to " << address.ip().string()
+                          << ":" << address.port() << "\n";
+            } else {
+                std::clog << "[ServerSide]: Error occured during sending data\n";
+            }
+        };
+
         server::Server<IPProto::TCP> server;
         server.bind({ "127.0.0.1", 25565U });
         server.listen(255U);
@@ -60,7 +59,7 @@ int main() {
         std::thread t = std::thread(clientThread);
 
         server.tryAccept(onAccept);
-		
+
         t.join();
     } catch (const Exception& e) {
         std::cout << "Exception caught: " << e.message() << std::endl;

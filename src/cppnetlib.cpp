@@ -34,7 +34,7 @@ namespace cppnetlib {
     // Global constants
 
     static constexpr platform::IoDataSizeT cMaxTransmitionUnitSize =
-        std::numeric_limits<platform::IoDataSizeT>::max();
+        1400;
 
     namespace exception {
         class UnknownAddressFamilyException : public Exception {
@@ -779,7 +779,7 @@ namespace cppnetlib {
             }
         }
 
-        void TCPSocketBase::listen(const std::size_t backlogSize) {
+        void TCPSocketBase::listen(const std::size_t backlogSize) const {
             if (!isSocketOpen()) {
                 throw Exception(FUNC_NAME +
                                 ": Could not open socket for listening, because the socket is not open");
@@ -793,7 +793,7 @@ namespace cppnetlib {
             }
         }
 
-        void TCPSocketBase::tryAccept(std::function<void(platform::SocketT&&, Address&&)>& onAccept) {
+        void TCPSocketBase::tryAccept(const std::function<void(platform::SocketT&&, Address&&)>& onAccept) const {
             sockaddr addr = {};
 
             if (connectAcceptTimeout(OpTimeout::Read, mAcceptTimeout)) {
@@ -892,7 +892,7 @@ namespace cppnetlib {
             }
         }
 
-        bool TCPSocketBase::connectAcceptTimeout(const OpTimeout selectTimeoutFor, const Timeout timeout) {
+        bool TCPSocketBase::connectAcceptTimeout(const OpTimeout selectTimeoutFor, const Timeout timeout) const {
             if (!isSocketOpen()) {
                 throw Exception(FUNC_NAME +
                                 ": Could not perform connect/accept timeout, because the socket is not open");
@@ -1128,12 +1128,12 @@ namespace cppnetlib {
 
         void Server<IPProto::TCP>::bind(const Address& address) { SocketBase::bind(address); }
 
-        void Server<IPProto::TCP>::listen(const std::size_t backlogSize) {
+        void Server<IPProto::TCP>::listen(const std::size_t backlogSize) const {
             TCPSocketBase::listen(backlogSize);
         }
 
-        void Server<IPProto::TCP>::tryAccept(
-            std::function<void(client::ClientBase<IPProto::TCP>&&, Address&& address)>& onAccept) {
+        void Server<IPProto::TCP>::tryAccept(const
+            std::function<void(client::ClientBase<IPProto::TCP>&&, Address&& address)>& onAccept) const {
             static std::function<void(platform::SocketT&&, Address &&)> onAcceptInternal(
                 [&](platform::SocketT&& socket, Address&& address) {
                     onAccept(client::ClientBase<IPProto::TCP>(std::move(socket)), std::move(address));
