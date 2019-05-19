@@ -3,17 +3,16 @@ cppnetlib is lightweight C++14 socket wrapper with very basic server/client impl
 
 Support: \
 Linux / Windows \
-IPV4 / IPV6 \
-TCP / UDP
+IPV4 / IPV6 (Automatic IP version recognition) \
+TCP / UDP \
 
 Sample code:
 ```c++
 // Client Sample:
 void client() {
-    client::Client<IPProto::TCP> client(IPVer::IPv4);
-    client.openSocket();
+    client::Client<IPProto::TCP> client;
     
-    client.connect({ IPVer::IPv4, "127.0.0.1", 25565U });
+    client.connect({ "127.0.0.1", 25565U });
 
     char buffer[1024] = {};
     const error::ExpectedValue<std::size_t, error::IOReturnValue> retv =
@@ -29,10 +28,9 @@ std::function<void(client::ClientBase<IPProto::TCP>&&, Address&&)>
 });
 
 void server() {
-    server::Server<IPProto::TCP> server(IPVer::IPv4);
-    server.openSocket();
+    server::Server<IPProto::TCP> server;
     
-    server.bind({ IPVer::IPv4, "127.0.0.1", 25565U });
+    server.bind({ "127.0.0.1", 25565U });
     server.listen(255U);
 
     server.tryAccept(onAccept);
