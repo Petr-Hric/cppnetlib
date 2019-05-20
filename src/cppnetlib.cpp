@@ -752,6 +752,13 @@ namespace cppnetlib {
             , mConnectTimeout(DEFAULT_TCP_CONNECT_TIMEOUT)
             , mAcceptTimeout(DEFAULT_TCP_ACCEPT_TIMEOUT) {}
 
+        TCPSocketBase::TCPSocketBase(TCPSocketBase&& other)
+            : SocketBase(std::move(dynamic_cast<SocketBase&>(other)))
+            , mSendTimeout(std::move(other.mSendTimeout))
+            , mRecvTimeout(std::move(other.mRecvTimeout))
+            , mConnectTimeout(std::move(other.mConnectTimeout))
+            , mAcceptTimeout(std::move(other.mAcceptTimeout)) {}
+
         TCPSocketBase::TCPSocketBase(platform::SocketT&& socket)
             : SocketBase(std::move(socket))
             , mSendTimeout(DEFAULT_TCP_SEND_TIMEOUT)
@@ -1056,6 +1063,9 @@ namespace cppnetlib {
     namespace client {
         ClientBase<IPProto::TCP>::ClientBase()
             : TCPSocketBase() {}
+
+        ClientBase<IPProto::TCP>::ClientBase(ClientBase&& other)
+            : TCPSocketBase(std::move(dynamic_cast<TCPSocketBase&>(other))) {}
 
         ClientBase<IPProto::TCP>::ClientBase(platform::SocketT&& socket)
             : TCPSocketBase(std::move(socket)) {}

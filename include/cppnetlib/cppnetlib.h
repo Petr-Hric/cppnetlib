@@ -123,12 +123,12 @@ namespace cppnetlib {
 
             SocketBase(SocketBase&& other);
 
+            SocketBase(const SocketBase&) = delete;
+            SocketBase& operator=(const SocketBase&) = delete;
+
             virtual ~SocketBase();
 
             SocketBase& operator=(SocketBase&& other);
-
-            SocketBase(const SocketBase&) = delete;
-            SocketBase& operator=(const SocketBase&) = delete;
 
             void close(const bool socketCreatedByUser = true);
 
@@ -159,6 +159,11 @@ namespace cppnetlib {
         class TCPSocketBase : public SocketBase {
         public:
             TCPSocketBase();
+
+            TCPSocketBase(TCPSocketBase&& other);
+
+            TCPSocketBase(const TCPSocketBase&) = delete;
+            TCPSocketBase& operator=(const TCPSocketBase&) = delete;
 
             TCPSocketBase(platform::SocketT&& socket);
 
@@ -201,6 +206,9 @@ namespace cppnetlib {
         public:
             UDPSocketBase();
 
+            UDPSocketBase(const UDPSocketBase&) = delete;
+            UDPSocketBase& operator=(const UDPSocketBase&) = delete;
+
             virtual ~UDPSocketBase();
 
             error::ExpectedValue<std::size_t, error::IOReturnValue>
@@ -234,9 +242,12 @@ namespace cppnetlib {
         template <>
         class ClientBase<IPProto::TCP> : protected base::TCPSocketBase {
         public:
-            ClientBase();
+            ClientBase(ClientBase&& other);
 
             ClientBase(platform::SocketT&& socket);
+
+            ClientBase(const ClientBase&) = delete;
+            ClientBase& operator=(const ClientBase&) = delete;
 
             virtual ~ClientBase();
 
@@ -255,6 +266,9 @@ namespace cppnetlib {
             Timeout getSendTimeout() const;
 
             Timeout getReceiveTimeout() const;
+
+        protected:
+            ClientBase();
         };
 
         // Client
@@ -266,6 +280,9 @@ namespace cppnetlib {
         class Client<IPProto::TCP> : public ClientBase<IPProto::TCP> {
         public:
             Client();
+
+            Client(const Client&) = delete;
+            Client& operator=(const Client&) = delete;
 
             virtual ~Client();
 
@@ -282,6 +299,9 @@ namespace cppnetlib {
         class Client<IPProto::UDP> : protected base::UDPSocketBase {
         public:
             Client();
+
+            Client(const Client&) = delete;
+            Client& operator=(const Client&) = delete;
 
             virtual ~Client();
 
@@ -318,6 +338,9 @@ namespace cppnetlib {
         public:
             Server();
 
+            Server(const Server&) = delete;
+            Server& operator=(const Server&) = delete;
+
             virtual ~Server();
 
             void bind(const Address& address);
@@ -340,6 +363,9 @@ namespace cppnetlib {
         class Server<IPProto::UDP> : public client::Client<IPProto::UDP> {
         public:
             Server();
+
+            Server(const Server&) = delete;
+            Server& operator=(const Server&) = delete;
 
             virtual ~Server();
 
