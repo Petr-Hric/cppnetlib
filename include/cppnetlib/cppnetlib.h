@@ -410,6 +410,8 @@ namespace cppnetlib {
 
         bool operator!=(const Address& other) const;
 
+        bool operator<(const Address& other) const;
+
         const Ip& ip() const;
 
         PortT port() const;

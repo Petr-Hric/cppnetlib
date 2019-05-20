@@ -530,6 +530,10 @@ namespace cppnetlib {
 
     bool Address::operator!=(const Address& other) const { return mIp != other.mIp || mPort != other.mPort; }
 
+    bool Address::operator<(const Address& other) const {
+        return mIp == other.mIp ? (mPort < other.mPort) : (mIp < other.mIp);
+    }
+
     const Ip& Address::ip() const { return mIp; }
 
     PortT Address::port() const { return mPort; }
