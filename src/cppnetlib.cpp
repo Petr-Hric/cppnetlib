@@ -33,7 +33,7 @@
 namespace cppnetlib {
     // Global constants
 
-    static constexpr platform::IoDataSizeT cMaxTransmitionUnitSize = 1400;
+    static constexpr platform::IoDataSizeT cMaxTransmitionUnitSize = MAX_TRANSMISSION_UNIT;
 
     namespace exception {
         class UnknownAddressFamilyException : public Exception {

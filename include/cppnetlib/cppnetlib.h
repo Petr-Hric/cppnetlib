@@ -8,6 +8,7 @@
 #include <string>
 
 #define FUNC_NAME std::string(__func__)
+#define MAX_TRANSMISSION_UNIT 1200
 
 namespace cppnetlib {
     // Common
@@ -67,6 +68,8 @@ namespace cppnetlib {
                 }
                 return mError;
             }
+
+            bool operator!() const { return hasError(); }
 
             template <typename OtherValueT, typename OtherErrorT>
             friend ExpectedValue<OtherValueT, OtherErrorT> makeError(const OtherErrorT& error);
