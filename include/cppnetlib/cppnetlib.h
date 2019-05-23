@@ -130,7 +130,7 @@ namespace cppnetlib {
 
             SocketBase& operator=(SocketBase&& other);
 
-            void close(const bool socketCreatedByUser = true);
+            void close();
 
             void bind(const Address& address);
 
@@ -455,5 +455,6 @@ namespace cppnetlib {
 // Overloaded operators
 
 std::ostream& operator<<(std::ostream& stream, const cppnetlib::Ip& ip);
+std::ostream& operator<<(std::ostream& stream, const cppnetlib::Address& address);
 
 #endif

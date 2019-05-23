@@ -8,7 +8,7 @@
 
 #define SOCKET_OP_SUCCESSFUL 0
 
-#define CPPNLTEST
+// #define CPPNLTEST
 
 #ifdef CPPNLTEST
 #define DEFAULT_TCP_SEND_TIMEOUT 5000
@@ -84,44 +84,36 @@ namespace cppnetlib {
     } // namespace error
 
     namespace platform {
-        class WinsockManager {
+        class Winsock {
         public:
-            static void init() {
-                if (mWinsockSocketCounter == 0U) {
-                    WSAData wsad;
-                    if (WSAStartup(WS_VERSION, &wsad) != 0) {
-                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                         "Could not initialize WinSock");
-                    }
+            Winsock() {
+                if (WSAStartup(WS_VERSION, &wsad) != 0) {
+                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                                                                     "Could not initialize WinSock");
                 }
-                ++mWinsockSocketCounter;
             }
 
-            static void uninit() {
-                if (mWinsockSocketCounter > 0) {
-                    if (mWinsockSocketCounter == 1) {
-                        if (WSACleanup() != 0) {
-                            throw exception::ExceptionWithSystemErrorMessage(
-                                FUNC_NAME, "Could not deinitialize WinSock");
-                        }
+            ~Winsock() {
+                try {
+                    if (WSACleanup() != 0) {
+                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                                                                         "Could not deinitialize WinSock");
                     }
-                    --mWinsockSocketCounter;
+                } catch (...) {
                 }
             }
 
         private:
-            static std::size_t mWinsockSocketCounter;
+            WSAData wsad;
         };
 
-        std::size_t WinsockManager::mWinsockSocketCounter = 0;
+        std::unique_ptr<Winsock> winsock = std::unique_ptr<Winsock>(new Winsock());
 
         inline error::NativeErrorCodeT nativeErrorCode() { return WSAGetLastError(); }
 
         SocketT nativeSocketOpen(const NativeFamilyT addressFamily, const int ipProtocol) {
             static std::mutex mtx;
             std::lock_guard<std::mutex> lock(mtx);
-
-            WinsockManager::init();
 
             int type = 0;
             switch (ipProtocol) {
@@ -144,22 +136,10 @@ namespace cppnetlib {
             return socket;
         }
 
-        void nativeSocketClose(platform::SocketT& socket, const bool createdByUser) {
-            static std::mutex mtx;
-            std::lock_guard<std::mutex> lock(mtx);
-
-            if (createdByUser) {
-                if (::closesocket(socket) != SOCKET_OP_SUCCESSFUL) {
-                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
-                }
-
-                WinsockManager::uninit();
-            } else {
-                if (::closesocket(socket) != SOCKET_OP_SUCCESSFUL) {
-                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
-                }
+        void nativeSocketClose(platform::SocketT& socket) {
+            if (::closesocket(socket) != SOCKET_OP_SUCCESSFUL) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
             }
-
             socket = INVALID_SOCKET_DESCRIPTOR;
         }
 
@@ -193,8 +173,6 @@ namespace cppnetlib {
             sockaddr_storage sockAddrStorage = {};
             sockAddrStorage.ss_family = addressFamily;
 
-            WinsockManager::init();
-
             char buffer[16] = {};
             switch (addressFamily) {
             case AF_INET:
@@ -216,7 +194,6 @@ namespace cppnetlib {
                               &reinterpret_cast<sockaddr_in6*>(&sockAddrStorage)->sin6_addr));
                 break;
             default:
-                WinsockManager::uninit();
                 throw exception::UnknownAddressFamilyException(FUNC_NAME);
             }
 
@@ -225,11 +202,9 @@ namespace cppnetlib {
                                     nullptr,
                                     dst,
                                     &s) != 0) {
-                WinsockManager::uninit();
                 throw exception::ExceptionWithSystemErrorMessage(
                     FUNC_NAME, "Could not convert address to human readable format");
             }
-            WinsockManager::uninit();
         }
 
         // For older Winsock2 versions
@@ -243,8 +218,6 @@ namespace cppnetlib {
 
             std::copy(src, src + INET6_ADDRSTRLEN + 1U, scrCopy);
 
-            WinsockManager::init();
-
             if (WSAStringToAddressA(
                     scrCopy, addressFamily, nullptr, (struct sockaddr*)&sockAddrStorage, &size) == 0) {
                 switch (addressFamily) {
@@ -257,15 +230,12 @@ namespace cppnetlib {
                         (reinterpret_cast<sockaddr_in6*>(&sockAddrStorage))->sin6_addr;
                     break;
                 default:
-                    WinsockManager::uninit();
                     throw exception::UnknownAddressFamilyException(FUNC_NAME);
                 }
             } else {
-                WinsockManager::uninit();
                 throw exception::ExceptionWithSystemErrorMessage(
                     FUNC_NAME, "Could not convert address to network format");
             }
-            WinsockManager::uninit();
         }
     } // namespace platform
 
@@ -653,11 +623,11 @@ namespace cppnetlib {
             return *this;
         }
 
-        void SocketBase::close(const bool socketCreatedByUser) {
+        void SocketBase::close() {
             if (!isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not close socket, because the socket is already closed");
             }
-            platform::nativeSocketClose(mSocket, socketCreatedByUser);
+            platform::nativeSocketClose(mSocket);
         }
 
         void SocketBase::bind(const Address& address) {
@@ -1193,4 +1163,8 @@ namespace cppnetlib {
 
 std::ostream& operator<<(std::ostream& stream, const cppnetlib::Ip& ip) {
     return (stream << ip.string());
+}
+
+std::ostream& operator<<(std::ostream& stream, const cppnetlib::Address& address) {
+    return (stream << address.ip().string() << ':' << address.port());
 }
