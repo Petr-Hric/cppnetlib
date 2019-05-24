@@ -107,7 +107,7 @@ namespace cppnetlib {
             WSAData wsad;
         };
 
-        std::unique_ptr<Winsock> winsock = std::unique_ptr<Winsock>(new Winsock());
+        static Winsock winsock;
 
         inline error::NativeErrorCodeT nativeErrorCode() { return WSAGetLastError(); }
 
@@ -137,6 +137,10 @@ namespace cppnetlib {
         }
 
         void nativeSocketClose(platform::SocketT& socket) {
+            if (::shutdown(socket, SD_BOTH) != 0) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not shutdown socket");
+            }
+
             if (::closesocket(socket) != SOCKET_OP_SUCCESSFUL) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
             }
@@ -270,7 +274,11 @@ namespace cppnetlib {
             return socket;
         }
 
-        void nativeSocketClose(platform::SocketT socket, const bool) {
+        void nativeSocketClose(platform::SocketT socket) {
+            if (::shutdown(socket, SD_BOTH) != 0) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not shutdown socket");
+            }
+
             if (::close(socket) != SOCKET_OP_SUCCESSFUL) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
             }
@@ -599,9 +607,9 @@ namespace cppnetlib {
             : mBlocking(false)
             , mSocket(INVALID_SOCKET_DESCRIPTOR) {}
 
-        SocketBase::SocketBase(platform::SocketT socket)
+        SocketBase::SocketBase(platform::SocketT&& socket)
             : mBlocking(false)
-            , mSocket(socket) {
+            , mSocket(std::exchange(socket, INVALID_SOCKET_DESCRIPTOR)) {
             setBlocked(false);
         }
 
@@ -617,8 +625,7 @@ namespace cppnetlib {
         }
 
         SocketBase& SocketBase::operator=(SocketBase&& other) {
-            mSocket = std::move(other.mSocket);
-            other.mSocket = INVALID_SOCKET_DESCRIPTOR;
+            mSocket = std::exchange(other.mSocket, INVALID_SOCKET_DESCRIPTOR);
             mBlocking = other.mBlocking;
             return *this;
         }
@@ -850,8 +857,11 @@ namespace cppnetlib {
                 if (platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
                     return error::makeError<std::size_t, error::IOReturnValue>(
                         error::IOReturnValue::OpWouldBlock);
+                } else if (platform::nativeErrorCode() == CPPNL_FORCEDISCONNECT) {
+                    return error::makeError<std::size_t, error::IOReturnValue>(
+                        error::IOReturnValue::ForciblyDisconnected);
                 }
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not recv data");
             } else if (retv == 0) {
                 return error::makeError<std::size_t, error::IOReturnValue>(
                     error::IOReturnValue::GracefullyDisconnected);
@@ -930,6 +940,11 @@ namespace cppnetlib {
             : SocketBase()
             , mSendToTimeout(DEFAULT_UDP_SENDTO_TIMEOUT)
             , mRecvFromTimeout(DEFAULT_UDP_RECVFROM_TIMEOUT) {}
+
+        UDPSocketBase::UDPSocketBase(UDPSocketBase&& other)
+            : SocketBase(std::move(dynamic_cast<SocketBase&>(other)))
+            , mSendToTimeout(std::move(other.mSendToTimeout))
+            , mRecvFromTimeout(std::move(other.mRecvFromTimeout)) {}
 
         UDPSocketBase::~UDPSocketBase() {}
 
@@ -1084,6 +1099,9 @@ namespace cppnetlib {
         Client<IPProto::UDP>::Client()
             : UDPSocketBase() {}
 
+        Client<IPProto::UDP>::Client(Client&& other)
+            : UDPSocketBase(std::move(dynamic_cast<UDPSocketBase&>(other))) {}
+
         Client<IPProto::UDP>::~Client() {}
 
         void Client<IPProto::UDP>::bind(const Address& address) { SocketBase::bind(address); }
@@ -1121,6 +1139,9 @@ namespace cppnetlib {
         Server<IPProto::TCP>::Server()
             : TCPSocketBase() {}
 
+        Server<IPProto::TCP>::Server(Server&& other)
+            : TCPSocketBase(std::move(dynamic_cast<TCPSocketBase&>(other))) {}
+
         Server<IPProto::TCP>::~Server() {}
 
         void Server<IPProto::TCP>::bind(const Address& address) { SocketBase::bind(address); }
@@ -1152,6 +1173,9 @@ namespace cppnetlib {
 
         Server<IPProto::UDP>::Server()
             : Client() {}
+
+        Server<IPProto::UDP>::Server(Server&& other)
+            : Client(std::move(dynamic_cast<Client&>(other))) {}
 
         Server<IPProto::UDP>::~Server() {}
 

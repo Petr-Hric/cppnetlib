@@ -48,6 +48,7 @@
 #define INVALID_SOCKET_DESCRIPTOR INVALID_SOCKET
 
 #define CPPNL_OPWOULDBLOCK WSAEWOULDBLOCK
+#define CPPNL_FORCEDISCONNECT WSAECONNRESET
 
 namespace cppnetlib {
     namespace error {
@@ -79,6 +80,7 @@ namespace cppnetlib {
 #define INVALID_SOCKET_DESCRIPTOR -1
 
 #define CPPNL_OPWOULDBLOCK EWOULDBLOCK
+#define CPPNL_FORCEDISCONNECT ECONNRESET
 
 namespace cppnetlib {
     namespace error {

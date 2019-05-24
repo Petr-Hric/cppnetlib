@@ -41,7 +41,7 @@ namespace cppnetlib {
     // Error namespace
 
     namespace error {
-        enum class IOReturnValue { Successful, OpWouldBlock, GracefullyDisconnected };
+        enum class IOReturnValue { Successful, OpWouldBlock, GracefullyDisconnected, ForciblyDisconnected };
 
         template <typename ValueT, typename ErrorT>
         class ExpectedValue {
@@ -122,7 +122,7 @@ namespace cppnetlib {
         public:
             SocketBase();
 
-            SocketBase(platform::SocketT socket);
+            SocketBase(platform::SocketT&& socket);
 
             SocketBase(SocketBase&& other);
 
@@ -209,6 +209,8 @@ namespace cppnetlib {
         public:
             UDPSocketBase();
 
+            UDPSocketBase(UDPSocketBase&& other);
+
             UDPSocketBase(const UDPSocketBase&) = delete;
             UDPSocketBase& operator=(const UDPSocketBase&) = delete;
 
@@ -284,6 +286,8 @@ namespace cppnetlib {
         public:
             Client();
 
+            Client(Client&& other);
+
             Client(const Client&) = delete;
             Client& operator=(const Client&) = delete;
 
@@ -302,6 +306,8 @@ namespace cppnetlib {
         class Client<IPProto::UDP> : protected base::UDPSocketBase {
         public:
             Client();
+
+            Client(Client&& other);
 
             Client(const Client&) = delete;
             Client& operator=(const Client&) = delete;
@@ -341,6 +347,8 @@ namespace cppnetlib {
         public:
             Server();
 
+            Server(Server&& other);
+
             Server(const Server&) = delete;
             Server& operator=(const Server&) = delete;
 
@@ -366,6 +374,8 @@ namespace cppnetlib {
         class Server<IPProto::UDP> : public client::Client<IPProto::UDP> {
         public:
             Server();
+
+            Server(Server&& other);
 
             Server(const Server&) = delete;
             Server& operator=(const Server&) = delete;
