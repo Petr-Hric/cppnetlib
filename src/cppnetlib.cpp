@@ -3,6 +3,7 @@
 #include "Endian/Endian.h"
 #include "Platform/Platform.h"
 
+#include <iostream>
 #include <algorithm>
 #include <cassert>
 
@@ -1190,5 +1191,5 @@ std::ostream& operator<<(std::ostream& stream, const cppnetlib::Ip& ip) {
 }
 
 std::ostream& operator<<(std::ostream& stream, const cppnetlib::Address& address) {
-    return (stream << address.ip().string() << ':' << address.port());
+    return stream << address.ip().string() << ':' << address.port();
 }
