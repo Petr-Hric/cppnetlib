@@ -810,7 +810,7 @@ namespace cppnetlib {
             onAccept(std::move(socket), createAddress(addr));
         }
 
-        error::ExpectedValue<std::size_t, error::IOReturnValue> TCPSocketBase::send(const TransmitDataT* data,
+        IOResult TCPSocketBase::send(const TransmitDataT* data,
                                                                                     const std::size_t size) {
             assert(data != nullptr);
             if (!isSocketOpen()) {
@@ -838,7 +838,7 @@ namespace cppnetlib {
             return static_cast<std::size_t>(retv);
         }
 
-        error::ExpectedValue<std::size_t, error::IOReturnValue>
+        IOResult
         TCPSocketBase::receive(TransmitDataT* data, const std::size_t maxSize) {
             assert(data != nullptr);
             if (!isSocketOpen()) {
@@ -958,7 +958,7 @@ namespace cppnetlib {
             setBlocked(false);
         }
 
-        error::ExpectedValue<std::size_t, error::IOReturnValue>
+        IOResult
         UDPSocketBase::sendTo(const TransmitDataT* data, const std::size_t size, const Address& address) {
             assert(data != nullptr);
 
@@ -991,7 +991,7 @@ namespace cppnetlib {
             return static_cast<std::size_t>(retv);
         }
 
-        error::ExpectedValue<std::size_t, error::IOReturnValue>
+        IOResult
         UDPSocketBase::receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) {
             assert(data != nullptr);
 
@@ -1058,12 +1058,12 @@ namespace cppnetlib {
 
         ClientBase<IPProto::TCP>::~ClientBase() {}
 
-        error::ExpectedValue<std::size_t, error::IOReturnValue>
+        IOResult
         ClientBase<IPProto::TCP>::send(const TransmitDataT* data, const std::size_t size) {
             return TCPSocketBase::send(data, size);
         }
 
-        error::ExpectedValue<std::size_t, error::IOReturnValue>
+        IOResult
         ClientBase<IPProto::TCP>::receive(TransmitDataT* data, const std::size_t maxSize) {
             return TCPSocketBase::receive(data, maxSize);
         }
@@ -1107,14 +1107,14 @@ namespace cppnetlib {
 
         void Client<IPProto::UDP>::bind(const Address& address) { SocketBase::bind(address); }
 
-        error::ExpectedValue<std::size_t, error::IOReturnValue>
+        IOResult
         Client<IPProto::UDP>::sendTo(const TransmitDataT* data,
                                      const std::size_t size,
                                      const Address& address) {
             return UDPSocketBase::sendTo(data, size, address);
         }
 
-        error::ExpectedValue<std::size_t, error::IOReturnValue>
+        IOResult
         Client<IPProto::UDP>::receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) {
             return UDPSocketBase::receiveFrom(data, maxSize, address);
         }

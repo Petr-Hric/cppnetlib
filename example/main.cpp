@@ -17,7 +17,7 @@ void clientThread() {
         client.connect(address);
 
         char dataBuffer[1024] = {};
-        const error::ExpectedValue<std::size_t, error::IOReturnValue> received =
+        const IOResult received =
             client.receive(reinterpret_cast<TransmitDataT*>(dataBuffer), sizeof(dataBuffer) - 1U).value();
         if (!received.hasError()) {
             std::cout << "[ClientSide]: Received message (Length: " << received.value() << ") - "
@@ -40,7 +40,7 @@ int main() {
                       << "[ServerSide]: Sending welcome message to " << address.ip().string() << ":"
                       << address.port() << " ...\n";
 
-            const error::ExpectedValue<std::size_t, error::IOReturnValue> sent = client.send(
+            const IOResult sent = client.send(
                 reinterpret_cast<const TransmitDataT*>(welcomeMessage.c_str()), welcomeMessage.size());
             if (!sent.hasError()) {
                 std::cout << "[ServerSide]: Welcome message successfuly sent to " << address.ip().string()

@@ -89,6 +89,8 @@ namespace cppnetlib {
         }
     } // namespace error
 
+    using IOResult = error::ExpectedValue<std::size_t, error::IOReturnValue>;
+
     // Platform namespace
 
     namespace platform {
@@ -178,10 +180,10 @@ namespace cppnetlib {
 
             void tryAccept(const std::function<void(platform::SocketT&&, Address&&)>& onAccept) const;
 
-            error::ExpectedValue<std::size_t, error::IOReturnValue> send(const TransmitDataT* data,
+            IOResult send(const TransmitDataT* data,
                                                                          const std::size_t size);
 
-            error::ExpectedValue<std::size_t, error::IOReturnValue> receive(TransmitDataT* data,
+            IOResult receive(TransmitDataT* data,
                                                                             const std::size_t maxSize);
 
             void setTimeout(const TCPTimeoutFor timeoutFor, const Timeout timeoutMs);
@@ -216,10 +218,10 @@ namespace cppnetlib {
 
             virtual ~UDPSocketBase();
 
-            error::ExpectedValue<std::size_t, error::IOReturnValue>
+            IOResult
             sendTo(const TransmitDataT* data, const std::size_t size, const Address& address);
 
-            error::ExpectedValue<std::size_t, error::IOReturnValue>
+            IOResult
             receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address);
 
             void setTimeout(const UDPTimeoutFor timeoutFor, const Timeout timeoutMs);
@@ -256,10 +258,10 @@ namespace cppnetlib {
 
             virtual ~ClientBase();
 
-            error::ExpectedValue<std::size_t, error::IOReturnValue> send(const TransmitDataT* data,
+            IOResult send(const TransmitDataT* data,
                                                                          const std::size_t size);
 
-            error::ExpectedValue<std::size_t, error::IOReturnValue> receive(TransmitDataT* data,
+            IOResult receive(TransmitDataT* data,
                                                                             const std::size_t maxSize);
 
             bool isSocketOpen() const;
@@ -316,10 +318,10 @@ namespace cppnetlib {
 
             void bind(const Address& address);
 
-            error::ExpectedValue<std::size_t, error::IOReturnValue>
+            IOResult
             sendTo(const TransmitDataT* data, const std::size_t size, const Address& address);
 
-            error::ExpectedValue<std::size_t, error::IOReturnValue>
+            IOResult
             receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address);
 
             bool isSocketOpen() const;
