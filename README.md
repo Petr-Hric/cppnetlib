@@ -3,5 +3,5 @@ cppnetlib is lightweight C++14 socket wrapper with very basic server/client impl
 
 Support: \
 Linux / Windows \
-IPV4 / IPV6 (Automatic IP version recognition) \
+IPV4 / IPV6 \
 TCP / UDP
