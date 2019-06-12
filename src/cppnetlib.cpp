@@ -659,7 +659,7 @@ namespace cppnetlib {
             }
 
             if (!platform::nativeSetBlocked(mSocket, blocked)) {
-                exception::ExceptionWithSystemErrorMessage(
+                throw exception::ExceptionWithSystemErrorMessage(
                     FUNC_NAME, "Could not set blocking/non-blocking socket property");
             }
 
@@ -684,7 +684,7 @@ namespace cppnetlib {
                                SO_SNDTIMEO,
                                reinterpret_cast<const char*>(&timeout),
                                sizeof(timeout)) != 0) {
-                    exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
                                                                "Could not set write operation timeout");
                 }
                 break;
@@ -694,7 +694,7 @@ namespace cppnetlib {
                                SO_RCVTIMEO,
                                reinterpret_cast<const char*>(&timeout),
                                sizeof(timeout)) != 0) {
-                    exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
                                                                "Could not set read operation timeout");
                 }
                 break;
