@@ -3,9 +3,9 @@
 #include "Endian/Endian.h"
 #include "Platform/Platform.h"
 
-#include <iostream>
 #include <algorithm>
 #include <cassert>
+#include <iostream>
 
 #define SOCKET_OP_SUCCESSFUL 0
 
@@ -583,27 +583,6 @@ namespace cppnetlib {
     // Base namespace
 
     namespace base {
-        class BlockGuard {
-        public:
-            BlockGuard(base::SocketBase& socketBase)
-                : mSocketBaseRef(socketBase)
-                , mWasBlocked(socketBase.blocked()) {
-                if (!mWasBlocked) {
-                    socketBase.setBlocked(true);
-                }
-            }
-
-            ~BlockGuard() {
-                if (!mWasBlocked) {
-                    mSocketBaseRef.setBlocked(false);
-                }
-            }
-
-        private:
-            base::SocketBase& mSocketBaseRef;
-            const bool mWasBlocked;
-        };
-
         SocketBase::SocketBase()
             : mBlocking(false)
             , mSocket(INVALID_SOCKET_DESCRIPTOR) {}
@@ -670,6 +649,48 @@ namespace cppnetlib {
 
         bool SocketBase::isSocketOpen() const { return mSocket != INVALID_SOCKET_DESCRIPTOR; }
 
+        bool SocketBase::rwTimeout(const OpTimeout selectTimeoutFor, const Timeout timeout) const {
+            if (!isSocketOpen()) {
+                throw Exception(FUNC_NAME +
+                                ": Could not perform connect/accept timeout, because the socket is not open");
+            }
+
+            fd_set fdSet;
+            fd_set* fdWritePtr = nullptr;
+            fd_set* fdReadPtr = nullptr;
+
+            switch (selectTimeoutFor) {
+            case OpTimeout::Write:
+                fdWritePtr = &fdSet;
+                break;
+            case OpTimeout::Read:
+                fdReadPtr = &fdSet;
+                break;
+            default:
+                throw Exception("Unknown value of SelectTimeout");
+            }
+
+            FD_ZERO(&fdSet);
+            FD_SET(mSocket, &fdSet);
+
+            timeval tv;
+            tv.tv_sec = timeout / 1000;
+            tv.tv_usec = timeout % 1000 * 1000;
+
+            const int selectRetv = select(static_cast<int>(mSocket + 1), fdReadPtr, fdWritePtr, nullptr, &tv);
+            if (selectRetv == 0) {
+                return true;
+            } else if (selectRetv == SOCKET_OP_UNSUCCESSFUL) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not perform select");
+            } else {
+                if (FD_ISSET(mSocket, &fdSet) <= 0) {
+                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                                                                     "Could not connect to the server");
+                }
+            }
+            return false;
+        }
+
         void SocketBase::setWriteReadTimeout(const OpTimeout opTimeoutFor, const Timeout timeout) {
             if (!isSocketOpen()) {
                 throw Exception(FUNC_NAME +
@@ -685,7 +706,7 @@ namespace cppnetlib {
                                reinterpret_cast<const char*>(&timeout),
                                sizeof(timeout)) != 0) {
                     throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                               "Could not set write operation timeout");
+                                                                     "Could not set write operation timeout");
                 }
                 break;
             case OpTimeout::Read:
@@ -695,7 +716,7 @@ namespace cppnetlib {
                                reinterpret_cast<const char*>(&timeout),
                                sizeof(timeout)) != 0) {
                     throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                               "Could not set read operation timeout");
+                                                                     "Could not set read operation timeout");
                 }
                 break;
             default:
@@ -767,7 +788,7 @@ namespace cppnetlib {
             case error::IOReturnValue::Successful:
                 return;
             case error::IOReturnValue::OpWouldBlock:
-                if (getConnectTimeout() > 0 && connectAcceptTimeout(OpTimeout::Write, getConnectTimeout())) {
+                if (getConnectTimeout() > 0 && rwTimeout(OpTimeout::Write, getConnectTimeout())) {
                     throw exception::ConnectionTimeoutException(FUNC_NAME);
                 }
                 break;
@@ -792,10 +813,11 @@ namespace cppnetlib {
         }
 
         void
-        TCPSocketBase::tryAccept(const std::function<void(platform::SocketT&&, Address&&)>& onAccept) const {
+        TCPSocketBase::tryAccept(const std::function<void(platform::SocketT&&, Address&&, void*)>& onAccept,
+                                 void* userArg) const {
             sockaddr addr = {};
 
-            if (connectAcceptTimeout(OpTimeout::Read, mAcceptTimeout)) {
+            if (rwTimeout(OpTimeout::Read, mAcceptTimeout)) {
                 return;
             }
 
@@ -807,17 +829,19 @@ namespace cppnetlib {
                 }
             }
 
-            onAccept(std::move(socket), createAddress(addr));
+            onAccept(std::move(socket), createAddress(addr), userArg);
         }
 
-        IOResult TCPSocketBase::send(const TransmitDataT* data,
-                                                                                    const std::size_t size) {
+        IOResult TCPSocketBase::send(const TransmitDataT* data, const std::size_t size) {
             assert(data != nullptr);
             if (!isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not send data, because the socket is not open");
             }
 
-            BlockGuard guard(*this);
+            if (rwTimeout(OpTimeout::Write, mSendTimeout)) {
+                return error::makeError<std::size_t, error::IOReturnValue>(
+                    error::IOReturnValue::OperationTimedOut);
+            }
 
             const platform::NetLibRetvT retv =
                 ::send(mSocket,
@@ -833,19 +857,21 @@ namespace cppnetlib {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
             }
 
-            assert(retv > 0);
+            assert(retv >= 0);
 
             return static_cast<std::size_t>(retv);
         }
 
-        IOResult
-        TCPSocketBase::receive(TransmitDataT* data, const std::size_t maxSize) {
+        IOResult TCPSocketBase::receive(TransmitDataT* data, const std::size_t maxSize) {
             assert(data != nullptr);
             if (!isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not receive data, because the socket is not open");
             }
 
-            BlockGuard guard(*this);
+            if (rwTimeout(OpTimeout::Read, mRecvTimeout)) {
+                return error::makeError<std::size_t, error::IOReturnValue>(
+                    error::IOReturnValue::OperationTimedOut);
+            }
 
             const platform::NetLibRetvT retv =
                 ::recv(mSocket,
@@ -877,11 +903,11 @@ namespace cppnetlib {
             switch (timeoutFor) {
             case TCPTimeoutFor::Send:
                 mSendTimeout = timeoutMs;
-                setWriteReadTimeout(OpTimeout::Write, timeoutMs);
+                // setWriteReadTimeout(OpTimeout::Write, timeoutMs);
                 break;
             case TCPTimeoutFor::Recieve:
                 mRecvTimeout = timeoutMs;
-                setWriteReadTimeout(OpTimeout::Read, timeoutMs);
+                // setWriteReadTimeout(OpTimeout::Read, timeoutMs);
                 break;
             case TCPTimeoutFor::Connect:
                 mConnectTimeout = timeoutMs;
@@ -892,49 +918,6 @@ namespace cppnetlib {
             default:
                 throw Exception("Unknwon TCPTimeoutFor value");
             }
-        }
-
-        bool TCPSocketBase::connectAcceptTimeout(const OpTimeout selectTimeoutFor,
-                                                 const Timeout timeout) const {
-            if (!isSocketOpen()) {
-                throw Exception(FUNC_NAME +
-                                ": Could not perform connect/accept timeout, because the socket is not open");
-            }
-
-            fd_set fdSet;
-            fd_set* fdWritePtr = nullptr;
-            fd_set* fdReadPtr = nullptr;
-
-            switch (selectTimeoutFor) {
-            case OpTimeout::Write:
-                fdWritePtr = &fdSet;
-                break;
-            case OpTimeout::Read:
-                fdReadPtr = &fdSet;
-                break;
-            default:
-                throw Exception("Unknown value of SelectTimeout");
-            }
-
-            FD_ZERO(&fdSet);
-            FD_SET(mSocket, &fdSet);
-
-            timeval tv;
-            tv.tv_sec = timeout / 1000;
-            tv.tv_usec = timeout % 1000 * 1000;
-
-            const int selectRetv = select(static_cast<int>(mSocket + 1), fdReadPtr, fdWritePtr, nullptr, &tv);
-            if (selectRetv == 0) {
-                return true;
-            } else if (selectRetv == SOCKET_OP_UNSUCCESSFUL) {
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not perform select");
-            } else {
-                if (FD_ISSET(mSocket, &fdSet) <= 0) {
-                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                     "Could not connect to the server");
-                }
-            }
-            return false;
         }
 
         UDPSocketBase::UDPSocketBase()
@@ -966,7 +949,10 @@ namespace cppnetlib {
                 openSocket(address.ip().version());
             }
 
-            BlockGuard guard(*this);
+            if (rwTimeout(OpTimeout::Write, mSendToTimeout)) {
+                return error::makeError<std::size_t, error::IOReturnValue>(
+                    error::IOReturnValue::OperationTimedOut);
+            }
 
             const sockaddr sockAddr = createSockAddr(address);
             const platform::NetLibRetvT retv =
@@ -999,7 +985,10 @@ namespace cppnetlib {
                 openSocket(address.ip().version());
             }
 
-            BlockGuard guard(*this);
+            if (rwTimeout(OpTimeout::Read, mRecvFromTimeout)) {
+                return error::makeError<std::size_t, error::IOReturnValue>(
+                    error::IOReturnValue::OperationTimedOut);
+            }
 
             sockaddr sockAddr = {};
             platform::SockLenT sockLen = helpers::toSockLen(IPVer::IPv6);
@@ -1058,13 +1047,11 @@ namespace cppnetlib {
 
         ClientBase<IPProto::TCP>::~ClientBase() {}
 
-        IOResult
-        ClientBase<IPProto::TCP>::send(const TransmitDataT* data, const std::size_t size) {
+        IOResult ClientBase<IPProto::TCP>::send(const TransmitDataT* data, const std::size_t size) {
             return TCPSocketBase::send(data, size);
         }
 
-        IOResult
-        ClientBase<IPProto::TCP>::receive(TransmitDataT* data, const std::size_t maxSize) {
+        IOResult ClientBase<IPProto::TCP>::receive(TransmitDataT* data, const std::size_t maxSize) {
             return TCPSocketBase::receive(data, maxSize);
         }
 
@@ -1107,10 +1094,9 @@ namespace cppnetlib {
 
         void Client<IPProto::UDP>::bind(const Address& address) { SocketBase::bind(address); }
 
-        IOResult
-        Client<IPProto::UDP>::sendTo(const TransmitDataT* data,
-                                     const std::size_t size,
-                                     const Address& address) {
+        IOResult Client<IPProto::UDP>::sendTo(const TransmitDataT* data,
+                                              const std::size_t size,
+                                              const Address& address) {
             return UDPSocketBase::sendTo(data, size, address);
         }
 
@@ -1151,15 +1137,17 @@ namespace cppnetlib {
             TCPSocketBase::listen(backlogSize);
         }
 
-        void Server<IPProto::TCP>::tryAccept(const std::function<void(client::ClientBase<IPProto::TCP>&&,
-                                                                      Address&& address)>& onAccept) const {
-            static std::function<void(platform::SocketT&&, Address &&)> onAcceptInternal(
-                [&](platform::SocketT&& socket, Address&& address) {
-                    onAccept(client::ClientBase<IPProto::TCP>(std::move(socket)), std::move(address));
+        void Server<IPProto::TCP>::tryAccept(
+            const std::function<void(client::ClientBase<IPProto::TCP>&&, Address&&, void*)>& onAccept,
+            void* userArg) const {
+            static std::function<void(platform::SocketT&&, Address&&, void*)> onAcceptInternal(
+                [&](platform::SocketT&& socket, Address&& address, void* userArg) {
+                    onAccept(
+                        client::ClientBase<IPProto::TCP>(std::move(socket)), std::move(address), userArg);
                     socket = INVALID_SOCKET_DESCRIPTOR;
                 });
 
-            TCPSocketBase::tryAccept(onAcceptInternal);
+            TCPSocketBase::tryAccept(onAcceptInternal, userArg);
         }
 
         bool Server<IPProto::TCP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }

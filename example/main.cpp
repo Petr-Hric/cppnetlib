@@ -32,7 +32,7 @@ void clientThread() {
 
 int main() {
     try {
-        static auto onAccept = [](client::ClientBase<IPProto::TCP>&& client, Address&& address) -> void {
+        static auto onAccept = [](client::ClientBase<IPProto::TCP>&& client, Address&& address, void* /*userArg*/) -> void {
             static const std::string welcomeMessage = "Welcome to cppnetlib server!";
 
             std::cout << "[ServerSide]: Client " << address.ip().string() << ":" << address.port()

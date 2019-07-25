@@ -1,4 +1,3 @@
-#!/ bin / bash
+#!/bin/bash
 
-find./ -regextype egrep - regex "(.*.h)|(.*.cpp)" - exec clang - format - i {}
-\;
+find ./ -iname *.h -o -iname *.cpp | xargs clang-format -i
