@@ -1,7 +1,7 @@
 #ifndef SOCKETBASE_H_
 #define SOCKETBASE_H_
 
-#include "Platform/platformDetect.h"
+#include "cppnetlib/Platform/platform_detect.h"
 
 #include <cstdint>
 #include <functional>
@@ -174,12 +174,14 @@ namespace cppnetlib {
         public:
             TCPSocketBase();
 
+            TCPSocketBase(platform::SocketT&& socket);
+
             TCPSocketBase(TCPSocketBase&& other);
+
+            TCPSocketBase& operator=(TCPSocketBase&& other);
 
             TCPSocketBase(const TCPSocketBase&) = delete;
             TCPSocketBase& operator=(const TCPSocketBase&) = delete;
-
-            TCPSocketBase(platform::SocketT&& socket);
 
             virtual ~TCPSocketBase();
 
@@ -255,9 +257,11 @@ namespace cppnetlib {
         template <>
         class ClientBase<IPProto::TCP> : protected base::TCPSocketBase {
         public:
+            ClientBase(platform::SocketT&& socket);
+
             ClientBase(ClientBase&& other);
 
-            ClientBase(platform::SocketT&& socket);
+            ClientBase& operator=(ClientBase&& other);
 
             ClientBase(const ClientBase&) = delete;
             ClientBase& operator=(const ClientBase&) = delete;
@@ -469,6 +473,8 @@ namespace cppnetlib {
         friend class base::TCPSocketBase;
         friend class base::UDPSocketBase;
     };
+
+    using OnAcceptFnc = std::function<void(client::ClientBase<IPProto::TCP>&&, class Address&&, void*)>;
 } // namespace cppnetlib
 
 // Overloaded operators

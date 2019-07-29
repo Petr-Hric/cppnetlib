@@ -1,7 +1,7 @@
 #include "cppnetlib/cppnetlib.h"
 
-#include "Endian/Endian.h"
-#include "Platform/Platform.h"
+#include "cppnetlib/endian/endian.h"
+#include "cppnetlib/platform/platform.h"
 
 #include <algorithm>
 #include <cassert>
@@ -767,6 +767,17 @@ namespace cppnetlib {
             socket = INVALID_SOCKET_DESCRIPTOR;
         }
 
+        TCPSocketBase& TCPSocketBase::operator=(TCPSocketBase&& other) {
+            mSendTimeout = std::move(other.mSendTimeout);
+            mRecvTimeout = std::move(other.mRecvTimeout);
+            mConnectTimeout = std::move(other.mConnectTimeout);
+            mAcceptTimeout = std::move(other.mAcceptTimeout);
+
+            SocketBase::operator=(std::move(static_cast<base::SocketBase&>(other)));
+
+            return *this;
+        }
+
         TCPSocketBase::~TCPSocketBase() {}
 
         void TCPSocketBase::openSocket(const IPVer ipVer) {
@@ -884,7 +895,8 @@ namespace cppnetlib {
                 if (platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
                     return error::makeError<std::size_t, error::IOReturnValue>(
                         error::IOReturnValue::OpWouldBlock);
-                } else if (platform::nativeErrorCode() == CPPNL_FORCEDISCONNECT) {
+                } else if (platform::nativeErrorCode() == CPPNL_FORCEDISCONNECT ||
+                           platform::nativeErrorCode() == CPPNL_CONNECTIONABORT) {
                     return error::makeError<std::size_t, error::IOReturnValue>(
                         error::IOReturnValue::ForciblyDisconnected);
                 }
@@ -1039,11 +1051,16 @@ namespace cppnetlib {
         ClientBase<IPProto::TCP>::ClientBase()
             : TCPSocketBase() {}
 
+        ClientBase<IPProto::TCP>::ClientBase(platform::SocketT&& socket)
+            : TCPSocketBase(std::move(socket)) {}
+
         ClientBase<IPProto::TCP>::ClientBase(ClientBase&& other)
             : TCPSocketBase(std::move(dynamic_cast<TCPSocketBase&>(other))) {}
 
-        ClientBase<IPProto::TCP>::ClientBase(platform::SocketT&& socket)
-            : TCPSocketBase(std::move(socket)) {}
+        ClientBase<IPProto::TCP>& ClientBase<IPProto::TCP>::operator=(ClientBase&& other) {
+            base::TCPSocketBase::operator=(std::move(dynamic_cast<base::TCPSocketBase&>(other)));
+            return *this;
+        }
 
         ClientBase<IPProto::TCP>::~ClientBase() {}
 
@@ -1137,9 +1154,7 @@ namespace cppnetlib {
             TCPSocketBase::listen(backlogSize);
         }
 
-        void Server<IPProto::TCP>::tryAccept(
-            const std::function<void(client::ClientBase<IPProto::TCP>&&, Address&&, void*)>& onAccept,
-            void* userArg) const {
+        void Server<IPProto::TCP>::tryAccept(const OnAcceptFnc& onAccept, void* userArg) const {
             static std::function<void(platform::SocketT&&, Address&&, void*)> onAcceptInternal(
                 [&](platform::SocketT&& socket, Address&& address, void* userArg) {
                     onAccept(

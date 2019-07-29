@@ -1,7 +1,7 @@
 #ifndef PLATFORM_H_
 #define PLATFORM_H_
 
-#include "Platform/platformDetect.h"
+#include "cppnetlib/platform/platform_detect.h"
 
 #if defined PLATFORM_WINDOWS
 
@@ -48,6 +48,8 @@
 #define INVALID_SOCKET_DESCRIPTOR INVALID_SOCKET
 
 #define CPPNL_OPWOULDBLOCK WSAEWOULDBLOCK
+#define CPPNL_FORCEDISCONNECT WSAECONNRESET
+#define CPPNL_CONNECTIONABORT WSAECONNABORTED
 
 namespace cppnetlib {
     namespace error {
@@ -62,7 +64,7 @@ namespace cppnetlib {
 #else
         using NativeFamilyT = short;
 #endif
-        using SockLenT = int;
+        using SockLenT = socklen_t;
         using NativeTransmitDataT = char;
     } // namespace platform
 } // namespace cppnetlib
@@ -71,11 +73,16 @@ namespace cppnetlib {
 
 #include <arpa/inet.h>
 #include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
 
 #define SOCKET_OP_UNSUCCESSFUL -1
 #define INVALID_SOCKET_DESCRIPTOR -1
 
 #define CPPNL_OPWOULDBLOCK EWOULDBLOCK
+#define CPPNL_FORCEDISCONNECT ECONNRESET
+#define CPPNL_CONNECTIONABORT ECONNABORTED
 
 namespace cppnetlib {
     namespace error {
@@ -86,7 +93,7 @@ namespace cppnetlib {
         using IoDataSizeT = std::size_t;
         using NetLibRetvT = int;
         using NativeFamilyT = int;
-        using SockLenT = std::size_t;
+        using SockLenT = socklen_t;
         using NativeTransmitDataT = char;
     } // namespace platform
 } // namespace cppnetlib
