@@ -1,7 +1,7 @@
 #ifndef SOCKETBASE_H_
 #define SOCKETBASE_H_
 
-#include "cppnetlib/Platform/platform_detect.h"
+#include "cppnetlib/platform/platform_detect.h"
 
 #include <cstdint>
 #include <functional>

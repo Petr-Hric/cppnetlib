@@ -51,6 +51,10 @@
 #define CPPNL_FORCEDISCONNECT WSAECONNRESET
 #define CPPNL_CONNECTIONABORT WSAECONNABORTED
 
+#define CPPNL_SHUT_RD SD_RECEIVE
+#define CPPNL_SHUT_WR SD_SEND
+#define CPPNL_SHUT_RDWR SD_BOTH
+
 namespace cppnetlib {
     namespace error {
         using NativeErrorCodeT = int;
@@ -83,6 +87,10 @@ namespace cppnetlib {
 #define CPPNL_OPWOULDBLOCK EWOULDBLOCK
 #define CPPNL_FORCEDISCONNECT ECONNRESET
 #define CPPNL_CONNECTIONABORT ECONNABORTED
+
+#define CPPNL_SHUT_RD SHUT_RD
+#define CPPNL_SHUT_WR SHUT_WR
+#define CPPNL_SHUT_RDWR SHUT_RDWR
 
 namespace cppnetlib {
     namespace error {

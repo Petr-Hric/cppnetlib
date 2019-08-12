@@ -138,7 +138,7 @@ namespace cppnetlib {
         }
 
         void nativeSocketClose(platform::SocketT& socket) {
-            if (::shutdown(socket, SD_BOTH) != 0) {
+            if (::shutdown(socket, CPPNL_SHUT_RDWR) != 0) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not shutdown socket");
             }
 
@@ -276,7 +276,7 @@ namespace cppnetlib {
         }
 
         void nativeSocketClose(platform::SocketT socket) {
-            if (::shutdown(socket, SD_BOTH) != 0) {
+            if (::shutdown(socket, CPPNL_SHUT_RDWR) != 0) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not shutdown socket");
             }
 
