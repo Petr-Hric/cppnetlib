@@ -9,3 +9,26 @@ Support: \
 Linux / Windows \
 IPV4 / IPV6 \
 TCP / UDP
+
+# example
+
+```
+// Server
+
+cppnetlib::server::Server<cppnetlib::IPProto::TCP> server;
+
+server.bind({ "127.0.0.1", 25565 });
+
+server.listen(255);
+
+server.tryAccept([](cppnetlib::client::ClientBase<cppnetlib::IPProto::TCP>&& client, cppnetlib::Address&& address, void*) -> void {
+    std::cout << "Client " << address << '\n';
+    }, nullptr
+);
+
+// Client
+
+cppnetlib::client::Client<cppnetlib::IPProto::TCP> client;
+
+client.connect({ "127.0.0.1", 25565 });
+```
