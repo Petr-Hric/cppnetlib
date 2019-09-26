@@ -39,7 +39,7 @@ namespace cppnetlib {
     namespace exception {
         class UnknownAddressFamilyException : public Exception {
         public:
-            explicit UnknownAddressFamilyException(std::string function)
+            explicit UnknownAddressFamilyException(const std::string& function)
                 : Exception(function + " -> Unknown address family") {}
         };
 
@@ -52,7 +52,7 @@ namespace cppnetlib {
 
         class ConnectionTimeoutException : public Exception {
         public:
-            explicit ConnectionTimeoutException(std::string function)
+            explicit ConnectionTimeoutException(const std::string& function)
                 : Exception(function + " -> Connection timeout") {}
         };
     } // namespace exception
