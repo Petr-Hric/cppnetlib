@@ -21,7 +21,9 @@ server.bind({ "127.0.0.1", 25565 });
 
 server.listen(255);
 
-server.tryAccept([](cppnetlib::client::ClientBase<cppnetlib::IPProto::TCP>&& client, cppnetlib::Address&& address, void*) -> void {
+server.tryAccept([](
+    cppnetlib::client::ClientBase<cppnetlib::IPProto::TCP>&& client
+    , cppnetlib::Address&& address, void*) -> void {
     std::cout << "Client " << address << '\n';
     }, nullptr
 );
