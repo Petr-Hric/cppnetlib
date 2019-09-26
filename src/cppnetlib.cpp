@@ -823,9 +823,9 @@ namespace cppnetlib {
             }
         }
 
-        void
-        TCPSocketBase::tryAccept(const std::function<void(platform::SocketT&&, Address&&, void*)>& onAccept,
-                                 void* userArg) const {
+        void TCPSocketBase::tryAccept(
+            const std::function<void(platform::SocketT&& sock, Address&& address, void* userArg)>& onAccept,
+            void* userArg) const {
             sockaddr addr = {};
 
             if (rwTimeout(OpTimeout::Read, mAcceptTimeout)) {
@@ -841,6 +841,12 @@ namespace cppnetlib {
             }
 
             onAccept(std::move(socket), createAddress(addr), userArg);
+        }
+
+        void TCPSocketBase::tryAccept(
+            std::function<void(platform::SocketT&& sock, Address&& address, void* userArg)>&& onAccept,
+            void* userArg) const {
+            tryAccept(onAccept, userArg);
         }
 
         IOResult TCPSocketBase::send(const TransmitDataT* data, const std::size_t size) {
@@ -1163,6 +1169,10 @@ namespace cppnetlib {
                 });
 
             TCPSocketBase::tryAccept(onAcceptInternal, userArg);
+        }
+
+        void Server<IPProto::TCP>::tryAccept(OnAcceptFnc&& onAccept, void* userArg) const {
+            tryAccept(onAccept, userArg);
         }
 
         bool Server<IPProto::TCP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }

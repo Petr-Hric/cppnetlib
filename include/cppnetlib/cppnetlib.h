@@ -26,6 +26,78 @@ namespace cppnetlib {
     using TransmitDataT = uint8_t;
     using Timeout = uint32_t;
 
+    // Ip
+
+    class Ip {
+    public:
+        Ip();
+
+        Ip(const Ip& other);
+
+        Ip(Ip&& other);
+
+        Ip(const char* ip);
+
+        Ip(const std::string& ip);
+
+        const std::string& string() const;
+
+        IPVer version() const;
+
+        bool operator==(const Ip& other) const;
+
+        bool operator!=(const Ip& other) const;
+
+        Ip& operator=(const Ip& other);
+
+        Ip& operator=(Ip&& other);
+
+        Ip& operator=(const char* ip);
+
+        Ip& operator=(const std::string& ip);
+
+        bool operator<(const Ip& other) const;
+
+    private:
+        static bool isIpV4Addr(const std::string& ip);
+
+        static bool isIpV6Addr(const std::string& ip);
+
+        IPVer mIpVer;
+        std::string mIpStr;
+    };
+
+    // Address
+
+    class Address {
+    public:
+        Address() = default;
+
+        Address(const Address& other);
+
+        Address(Address&& other);
+
+        Address(const Ip& ip, const PortT port);
+
+        Address& operator=(const Address& other);
+
+        Address& operator=(Address&& other);
+
+        bool operator==(const Address& other) const;
+
+        bool operator!=(const Address& other) const;
+
+        bool operator<(const Address& other) const;
+
+        const Ip& ip() const;
+
+        PortT port() const;
+
+    private:
+        Ip mIp = "";
+        PortT mPort = 0U;
+    };
+
     // Exception
 
     class Exception {
@@ -194,6 +266,10 @@ namespace cppnetlib {
                           onAccept,
                       void* userArg = nullptr) const;
 
+            void 
+            tryAccept(std::function<void(platform::SocketT&& sock, Address&& address, void* userArg)>&& onAccept,
+                void* userArg = nullptr) const;
+
             IOResult send(const TransmitDataT* data, const std::size_t size);
 
             IOResult receive(TransmitDataT* data, const std::size_t maxSize);
@@ -342,6 +418,8 @@ namespace cppnetlib {
         };
     } // namespace client
 
+    using OnAcceptFnc = std::function<void(client::ClientBase<IPProto::TCP>&&, Address&&, void*)>;
+
     // Server namespace
 
     namespace server {
@@ -366,10 +444,9 @@ namespace cppnetlib {
 
             void listen(const std::size_t backlogSize) const;
 
-            void tryAccept(const std::function<void(client::ClientBase<IPProto::TCP>&& client,
-                                                    Address&& address,
-                                                    void* userArg)>& onAccept,
-                           void* userArg = nullptr) const;
+            void tryAccept(const OnAcceptFnc& onAccept, void* userArg = nullptr) const;
+
+            void tryAccept(OnAcceptFnc && onAccept, void* userArg = nullptr) const;
 
             bool isSocketOpen() const;
 
@@ -397,84 +474,6 @@ namespace cppnetlib {
             void close();
         };
     } // namespace server
-
-    // Ip
-
-    class Ip {
-    public:
-        Ip();
-
-        Ip(const Ip& other);
-
-        Ip(Ip&& other);
-
-        Ip(const char* ip);
-
-        Ip(const std::string& ip);
-
-        const std::string& string() const;
-
-        IPVer version() const;
-
-        bool operator==(const Ip& other) const;
-
-        bool operator!=(const Ip& other) const;
-
-        Ip& operator=(const Ip& other);
-
-        Ip& operator=(Ip&& other);
-
-        Ip& operator=(const char* ip);
-
-        Ip& operator=(const std::string& ip);
-
-        bool operator<(const Ip& other) const;
-
-    private:
-        static bool isIpV4Addr(const std::string& ip);
-
-        static bool isIpV6Addr(const std::string& ip);
-
-        IPVer mIpVer;
-        std::string mIpStr;
-    };
-
-    // Address
-
-    class Address {
-    public:
-        Address() = default;
-
-        Address(const Address& other);
-
-        Address(Address&& other);
-
-        Address(const Ip& ip, const PortT port);
-
-        Address& operator=(const Address& other);
-
-        Address& operator=(Address&& other);
-
-        bool operator==(const Address& other) const;
-
-        bool operator!=(const Address& other) const;
-
-        bool operator<(const Address& other) const;
-
-        const Ip& ip() const;
-
-        PortT port() const;
-
-    private:
-        Ip mIp = "";
-        PortT mPort = 0U;
-
-        friend class base::SocketBase;
-        friend class base::TCPSocketBase;
-        friend class base::UDPSocketBase;
-    };
-
-    using OnAcceptFnc = std::function<void(client::ClientBase<IPProto::TCP>&&, class Address&&, void*)>;
 } // namespace cppnetlib
 
 // Overloaded operators
