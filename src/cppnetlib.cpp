@@ -289,7 +289,7 @@ namespace cppnetlib {
             const sockaddr sockAddr = createSockAddr(address);
             if (::connect(socket, &sockAddr, helpers::toSockLen(address)) != SOCKET_OP_SUCCESSFUL) {
                 if (nativeErrorCode() == EWOULDBLOCK) {
-                    error::IOReturnValue::OpWouldBlock;
+                    return error::IOReturnValue::OpWouldBlock;
                 }
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
                                                                  "Could not connect to the server");
