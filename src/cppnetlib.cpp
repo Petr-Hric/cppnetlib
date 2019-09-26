@@ -39,20 +39,20 @@ namespace cppnetlib {
     namespace exception {
         class UnknownAddressFamilyException : public Exception {
         public:
-            UnknownAddressFamilyException(std::string function) explicit
+            explicit UnknownAddressFamilyException(std::string function)
                 : Exception(function + " -> Unknown address family") {}
         };
 
         class ExceptionWithSystemErrorMessage : public Exception {
         public:
-            ExceptionWithSystemErrorMessage(std::string function, std::string message)
+            ExceptionWithSystemErrorMessage(std::string function, const std::string& message)
                 : Exception(function + " -> " + message + " [" + std::to_string(platform::nativeErrorCode()) +
                             " | Native message - " + error::toString(platform::nativeErrorCode()) + "]") {}
         };
 
         class ConnectionTimeoutException : public Exception {
         public:
-            ConnectionTimeoutException(std::string function) explicit
+            explicit ConnectionTimeoutException(std::string function)
                 : Exception(function + " -> Connection timeout") {}
         };
     } // namespace exception
