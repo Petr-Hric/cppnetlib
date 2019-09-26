@@ -45,7 +45,7 @@ namespace cppnetlib {
 
         class ExceptionWithSystemErrorMessage : public Exception {
         public:
-            ExceptionWithSystemErrorMessage(std::string function, const std::string& message)
+            ExceptionWithSystemErrorMessage(const std::string& function, const std::string& message)
                 : Exception(function + " -> " + message + " [" + std::to_string(platform::nativeErrorCode()) +
                             " | Native message - " + error::toString(platform::nativeErrorCode()) + "]") {}
         };
