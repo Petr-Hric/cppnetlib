@@ -12,7 +12,7 @@ TCP / UDP
 
 # example
 
-```
+```cpp
 // Server
 
 cppnetlib::server::Server<cppnetlib::IPProto::TCP> server;
