@@ -10,8 +10,6 @@ Linux / Windows \
 IPV4 / IPV6 \
 TCP / UDP
 
-# example
-
 ```cpp
 // Server
 
