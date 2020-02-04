@@ -121,6 +121,12 @@ namespace cppnetlib {
             OperationTimedOut
         };
 
+        enum class ConnectReturnValue {
+            Successful,
+            OpWouldBlock,
+            OperationTimedOut
+        };
+
         template <typename ValueT, typename ErrorT>
         class ExpectedValue {
         public:
@@ -168,6 +174,7 @@ namespace cppnetlib {
     } // namespace error
 
     using IOResult = error::ExpectedValue<std::size_t, error::IOReturnValue>;
+    using ConnectResult = error::ExpectedValue<bool, error::ConnectReturnValue>;
 
     // Platform namespace
 
@@ -257,7 +264,7 @@ namespace cppnetlib {
 
             virtual ~TCPSocketBase();
 
-            void connect(const Address& address);
+            ConnectResult connect(const Address& address);
 
             void listen(const std::size_t backlogSize) const;
 
@@ -379,7 +386,7 @@ namespace cppnetlib {
 
             virtual ~Client();
 
-            void connect(const Address& address);
+            ConnectResult connect(const Address& address);
 
             bool isSocketOpen() const;
 

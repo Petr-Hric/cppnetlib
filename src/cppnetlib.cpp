@@ -151,11 +151,15 @@ namespace cppnetlib {
         error::IOReturnValue nativeConnect(platform::SocketT& socket, const Address& address) {
             const sockaddr sockAddr = createSockAddr(address);
             if (::connect(socket, &sockAddr, helpers::toSockLen(address)) != SOCKET_OP_SUCCESSFUL) {
-                if (nativeErrorCode() == WSAEWOULDBLOCK) {
+                const int errorCode = nativeErrorCode();
+                switch (errorCode) {
+                case WSAEALREADY:
+                case WSAEWOULDBLOCK:
                     return error::IOReturnValue::OpWouldBlock;
+                default:
+                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                                                                     "Could not connect to the server");
                 }
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                 "Could not connect to the server");
             }
             return error::IOReturnValue::Successful;
         }
@@ -789,7 +793,7 @@ namespace cppnetlib {
             setBlocked(false);
         }
 
-        void TCPSocketBase::connect(const Address& address) {
+        ConnectResult TCPSocketBase::connect(const Address& address) {
             if (!isSocketOpen()) {
                 openSocket(address.ip().version());
             }
@@ -797,10 +801,14 @@ namespace cppnetlib {
             const error::IOReturnValue errorCode = platform::nativeConnect(mSocket, address);
             switch (errorCode) {
             case error::IOReturnValue::Successful:
-                return;
+                return true;
             case error::IOReturnValue::OpWouldBlock:
                 if (getConnectTimeout() > 0 && rwTimeout(OpTimeout::Write, getConnectTimeout())) {
-                    throw exception::ConnectionTimeoutException(FUNC_NAME);
+                    return error::makeError<bool, error::ConnectReturnValue>(
+                        error::ConnectReturnValue::OperationTimedOut);
+                } else {
+                    return error::makeError<bool, error::ConnectReturnValue>(
+                        error::ConnectReturnValue::OpWouldBlock);
                 }
                 break;
             default:
@@ -1097,7 +1105,9 @@ namespace cppnetlib {
 
         Client<IPProto::TCP>::~Client() {}
 
-        void Client<IPProto::TCP>::connect(const Address& address) { TCPSocketBase::connect(address); }
+        ConnectResult Client<IPProto::TCP>::connect(const Address& address) {
+            return TCPSocketBase::connect(address);
+        }
 
         bool Client<IPProto::TCP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }
 
