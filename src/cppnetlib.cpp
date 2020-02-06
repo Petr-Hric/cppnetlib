@@ -817,7 +817,7 @@ namespace cppnetlib {
             #else
             #error Unsupported platform
             #endif
-            }
+        }
 
         TCPSocketBase::TCPSocketBase()
             : SocketBase()
@@ -970,11 +970,17 @@ namespace cppnetlib {
                 std::min<std::size_t>(static_cast<std::size_t>(cMaxTransmitionUnitSize), size)),
                 0);
             if(retv == SOCKET_OP_UNSUCCESSFUL) {
-                if(platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
-                    return error::makeError<std::size_t, error::IOReturnValue>(
-                        error::IOReturnValue::OpWouldBlock);
+                const error::NativeErrorCodeT errorCode = platform::nativeErrorCode();
+                switch(errorCode) {
+                    case CPPNL_OPWOULDBLOCK:
+                        return error::makeError<std::size_t, error::IOReturnValue>(
+                            error::IOReturnValue::OpWouldBlock);
+                    case CPPNL_FORCEDISCONNECT:
+                        return error::makeError<std::size_t, error::IOReturnValue>(
+                            error::IOReturnValue::ForciblyDisconnected);
+                    default:
+                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
                 }
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
             }
 
             assert(retv >= 0);
@@ -1001,15 +1007,18 @@ namespace cppnetlib {
                 0);
 
             if(retv == SOCKET_OP_UNSUCCESSFUL) {
-                if(platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
-                    return error::makeError<std::size_t, error::IOReturnValue>(
-                        error::IOReturnValue::OpWouldBlock);
-                } else if(platform::nativeErrorCode() == CPPNL_FORCEDISCONNECT ||
-                    platform::nativeErrorCode() == CPPNL_CONNECTIONABORT) {
-                    return error::makeError<std::size_t, error::IOReturnValue>(
-                        error::IOReturnValue::ForciblyDisconnected);
+                const error::NativeErrorCodeT errorCode = platform::nativeErrorCode();
+                switch(errorCode) {
+                    case CPPNL_OPWOULDBLOCK:
+                        return error::makeError<std::size_t, error::IOReturnValue>(
+                            error::IOReturnValue::OpWouldBlock);
+                    case CPPNL_FORCEDISCONNECT:
+                    case CPPNL_CONNECTIONABORT:
+                        return error::makeError<std::size_t, error::IOReturnValue>(
+                            error::IOReturnValue::ForciblyDisconnected);
+                    default:
+                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not recv data");
                 }
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not recv data");
             } else if(retv == 0) {
                 return error::makeError<std::size_t, error::IOReturnValue>(
                     error::IOReturnValue::GracefullyDisconnected);
@@ -1130,9 +1139,9 @@ namespace cppnetlib {
 
             return static_cast<std::size_t>(retv);
         }
-        } // namespace base
+    } // namespace base
 
-        // Client namespace
+    // Client namespace
 
     namespace client {
         ClientBase<IPProto::TCP>::ClientBase()
@@ -1262,9 +1271,9 @@ namespace cppnetlib {
 
         void Server<IPProto::UDP>::close() { SocketBase::close(); }
     } // namespace server
-    } // namespace cppnetlib
+} // namespace cppnetlib
 
-    // Overloaded operators
+// Overloaded operators
 
 std::ostream& operator<<(std::ostream& stream, const cppnetlib::Ip& ip) {
     return (stream << ip.string());
