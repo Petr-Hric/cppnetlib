@@ -62,33 +62,6 @@ namespace cppnetlib {
     }
     sockaddr createSockAddr(const Address& address);
 
-    namespace platform {
-        SocketT nativeSocketOpen(const NativeFamilyT addressFamily, const int ipProtocol) {
-            static std::mutex mtx;
-            std::lock_guard<std::mutex> lock(mtx);
-
-            int type = 0;
-            switch(ipProtocol) {
-                case IPPROTO_TCP:
-                    type = SOCK_STREAM;
-                    break;
-                case IPPROTO_UDP:
-                    type = SOCK_DGRAM;
-                    break;
-                default:
-                    assert(false);
-                    throw Exception(FUNC_NAME + ": Unknown addressFamily value");
-            }
-
-            const SocketT socket = ::socket(addressFamily, type, ipProtocol);
-            if(socket == INVALID_SOCKET_DESCRIPTOR) {
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not open socket");
-            }
-
-            return socket;
-        }
-    }
-
     // Platform dependent definitions/declarations
 
     #if defined PLATFORM_WINDOWS
@@ -141,6 +114,31 @@ namespace cppnetlib {
         static Winsock winsock;
 
         inline error::NativeErrorCodeT nativeErrorCode() { return WSAGetLastError(); }
+
+        SocketT nativeSocketOpen(const NativeFamilyT addressFamily, const int ipProtocol) {
+            static std::mutex mtx;
+            std::lock_guard<std::mutex> lock(mtx);
+
+            int type = 0;
+            switch(ipProtocol) {
+                case IPPROTO_TCP:
+                    type = SOCK_STREAM;
+                    break;
+                case IPPROTO_UDP:
+                    type = SOCK_DGRAM;
+                    break;
+                default:
+                    assert(false);
+                    throw Exception(FUNC_NAME + ": Unknown addressFamily value");
+            }
+
+            const platform::SocketT socket = ::socket(addressFamily, type, ipProtocol);
+            if(socket == INVALID_SOCKET_DESCRIPTOR) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not open socket");
+            }
+
+            return socket;
+        }
 
         void nativeSocketClose(platform::SocketT& socket) {
             if(::shutdown(socket, CPPNL_SHUT_RDWR) != 0) {
@@ -279,6 +277,28 @@ namespace cppnetlib {
 
     namespace platform {
         inline error::NativeErrorCodeT nativeErrorCode() { return errno; }
+
+        SocketT nativeSocketOpen(const NativeFamilyT addressFamily, const int ipProtocol) {
+            int type = 0;
+            switch(ipProtocol) {
+                case IPPROTO_TCP:
+                    type = SOCK_STREAM;
+                    break;
+                case IPPROTO_UDP:
+                    type = SOCK_DGRAM;
+                    break;
+                default:
+                    assert(false);
+                    throw Exception(FUNC_NAME + ": Unknown addressFamily value");
+            }
+
+            const platform::SocketT socket = ::socket(addressFamily, type, ipProtocol);
+            if(socket == INVALID_SOCKET_DESCRIPTOR) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not create socket");
+            }
+
+            return socket;
+        }
 
         void nativeSocketClose(platform::SocketT socket) {
             if(::shutdown(socket, CPPNL_SHUT_RDWR) != 0) {
@@ -797,7 +817,7 @@ namespace cppnetlib {
             #else
             #error Unsupported platform
             #endif
-        }
+            }
 
         TCPSocketBase::TCPSocketBase()
             : SocketBase()
@@ -1110,9 +1130,9 @@ namespace cppnetlib {
 
             return static_cast<std::size_t>(retv);
         }
-    } // namespace base
+        } // namespace base
 
-    // Client namespace
+        // Client namespace
 
     namespace client {
         ClientBase<IPProto::TCP>::ClientBase()
@@ -1242,9 +1262,9 @@ namespace cppnetlib {
 
         void Server<IPProto::UDP>::close() { SocketBase::close(); }
     } // namespace server
-} // namespace cppnetlib
+    } // namespace cppnetlib
 
-// Overloaded operators
+    // Overloaded operators
 
 std::ostream& operator<<(std::ostream& stream, const cppnetlib::Ip& ip) {
     return (stream << ip.string());
