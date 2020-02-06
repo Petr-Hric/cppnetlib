@@ -716,19 +716,19 @@ namespace cppnetlib {
             } else if(selectRetv == SOCKET_OP_UNSUCCESSFUL) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not perform select");
             } else {
-                if(FD_ISSET(mSocket, &fdSet) <= 0) {
-                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                        "Could not connect to the server");
+                if(FD_ISSET(mSocket, &fdErrorSet) != 0) {
+                    int err = 0;
+                    int optLen = sizeof(err);
+
+                    platform::nativeGetSockOpt(mSocket, SOL_SOCKET, SO_ERROR, &err, &optLen);
+
+                    return true;
                 }
-            }
 
-            if(FD_ISSET(mSocket, &fdErrorSet)) {
-                int err = 0;
-                int optLen = sizeof(err);
-
-                platform::nativeGetSockOpt(mSocket, SOL_SOCKET, SO_ERROR, &err, &optLen);
-
-                return true;
+                if(FD_ISSET(mSocket, &fdSet) == 0) {
+                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                        "Unexpected behavior");
+                }
             }
 
             return false;
