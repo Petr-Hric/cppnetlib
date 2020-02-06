@@ -47,7 +47,7 @@ namespace cppnetlib {
         public:
             ExceptionWithSystemErrorMessage(const std::string& function, const std::string& message)
                 : Exception(function + " -> " + message + " [" + std::to_string(platform::nativeErrorCode()) +
-                            " | Native message - " + error::toString(platform::nativeErrorCode()) + "]") {}
+                " | Native message - " + error::toString(platform::nativeErrorCode()) + "]") {}
         };
 
         class ConnectionTimeoutException : public Exception {
@@ -64,20 +64,20 @@ namespace cppnetlib {
 
     // Platform dependent definitions/declarations
 
-#if defined PLATFORM_WINDOWS
+    #if defined PLATFORM_WINDOWS
 
     namespace error {
         std::string toString(const NativeErrorCodeT value) {
             std::string output;
             char* message = nullptr;
             FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                               FORMAT_MESSAGE_IGNORE_INSERTS,
-                           nullptr,
-                           value,
-                           MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                           (LPSTR)&message,
-                           0,
-                           nullptr);
+                FORMAT_MESSAGE_IGNORE_INSERTS,
+                nullptr,
+                value,
+                MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                (LPSTR)&message,
+                0,
+                nullptr);
             output = message;
             LocalFree(message);
             return output;
@@ -88,19 +88,19 @@ namespace cppnetlib {
         class Winsock {
         public:
             Winsock() {
-                if (WSAStartup(WS_VERSION, &wsad) != 0) {
+                if(WSAStartup(WS_VERSION, &wsad) != 0) {
                     throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                     "Could not initialize WinSock");
+                        "Could not initialize WinSock");
                 }
             }
 
             ~Winsock() {
                 try {
-                    if (WSACleanup() != 0) {
+                    if(WSACleanup() != 0) {
                         throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                         "Could not deinitialize WinSock");
+                            "Could not deinitialize WinSock");
                     }
-                } catch (...) {
+                } catch(...) {
                 }
             }
 
@@ -117,20 +117,20 @@ namespace cppnetlib {
             std::lock_guard<std::mutex> lock(mtx);
 
             int type = 0;
-            switch (ipProtocol) {
-            case IPPROTO_TCP:
-                type = SOCK_STREAM;
-                break;
-            case IPPROTO_UDP:
-                type = SOCK_DGRAM;
-                break;
-            default:
-                assert(false);
-                throw Exception(FUNC_NAME + ": Unknown addressFamily value");
+            switch(ipProtocol) {
+                case IPPROTO_TCP:
+                    type = SOCK_STREAM;
+                    break;
+                case IPPROTO_UDP:
+                    type = SOCK_DGRAM;
+                    break;
+                default:
+                    assert(false);
+                    throw Exception(FUNC_NAME + ": Unknown addressFamily value");
             }
 
             const platform::SocketT socket = ::socket(addressFamily, type, ipProtocol);
-            if (socket == INVALID_SOCKET_DESCRIPTOR) {
+            if(socket == INVALID_SOCKET_DESCRIPTOR) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not open socket");
             }
 
@@ -138,11 +138,11 @@ namespace cppnetlib {
         }
 
         void nativeSocketClose(platform::SocketT& socket) {
-            if (::shutdown(socket, CPPNL_SHUT_RDWR) != 0) {
+            if(::shutdown(socket, CPPNL_SHUT_RDWR) != 0) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not shutdown socket");
             }
 
-            if (::closesocket(socket) != SOCKET_OP_SUCCESSFUL) {
+            if(::closesocket(socket) != SOCKET_OP_SUCCESSFUL) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
             }
             socket = INVALID_SOCKET_DESCRIPTOR;
@@ -150,15 +150,15 @@ namespace cppnetlib {
 
         error::IOReturnValue nativeConnect(platform::SocketT& socket, const Address& address) {
             const sockaddr sockAddr = createSockAddr(address);
-            if (::connect(socket, &sockAddr, helpers::toSockLen(address)) != SOCKET_OP_SUCCESSFUL) {
+            if(::connect(socket, &sockAddr, helpers::toSockLen(address)) != SOCKET_OP_SUCCESSFUL) {
                 const int errorCode = nativeErrorCode();
-                switch (errorCode) {
-                case WSAEALREADY:
-                case WSAEWOULDBLOCK:
-                    return error::IOReturnValue::OpWouldBlock;
-                default:
-                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                     "Could not connect to the server");
+                switch(errorCode) {
+                    case WSAEALREADY:
+                    case WSAEWOULDBLOCK:
+                        return error::IOReturnValue::OpWouldBlock;
+                    default:
+                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                            "Could not connect to the server");
                 }
             }
             return error::IOReturnValue::Successful;
@@ -171,9 +171,9 @@ namespace cppnetlib {
 
         // For older Winsock2 versions
         void nativeInetNtop(const NativeFamilyT addressFamily,
-                            const void* src,
-                            char* dst,
-                            const std::size_t dstMaxSize) {
+            const void* src,
+            char* dst,
+            const std::size_t dstMaxSize) {
             assert(src != nullptr);
             assert(dst != nullptr);
 
@@ -183,34 +183,34 @@ namespace cppnetlib {
             sockAddrStorage.ss_family = addressFamily;
 
             char buffer[16] = {};
-            switch (addressFamily) {
-            case AF_INET:
-                std::copy(reinterpret_cast<const char*>(src),
-                          reinterpret_cast<const char*>(src) + sizeof(sockaddr_in::sin_addr),
-                          buffer);
-                std::copy(
-                    reinterpret_cast<const in_addr*>(buffer),
-                    reinterpret_cast<const in_addr*>(buffer) + sizeof(in_addr),
-                    reinterpret_cast<in_addr*>(&reinterpret_cast<sockaddr_in*>(&sockAddrStorage)->sin_addr));
-                break;
-            case AF_INET6:
-                std::copy(reinterpret_cast<const char*>(src),
-                          reinterpret_cast<const char*>(src) + sizeof(sockaddr_in6::sin6_addr),
-                          buffer);
-                std::copy(reinterpret_cast<const in6_addr*>(buffer),
-                          reinterpret_cast<const in6_addr*>(buffer) + sizeof(in6_addr),
-                          reinterpret_cast<in6_addr*>(
-                              &reinterpret_cast<sockaddr_in6*>(&sockAddrStorage)->sin6_addr));
-                break;
-            default:
-                throw exception::UnknownAddressFamilyException(FUNC_NAME);
+            switch(addressFamily) {
+                case AF_INET:
+                    std::copy(reinterpret_cast<const char*>(src),
+                        reinterpret_cast<const char*>(src) + sizeof(sockaddr_in::sin_addr),
+                        buffer);
+                    std::copy(
+                        reinterpret_cast<const in_addr*>(buffer),
+                        reinterpret_cast<const in_addr*>(buffer) + sizeof(in_addr),
+                        reinterpret_cast<in_addr*>(&reinterpret_cast<sockaddr_in*>(&sockAddrStorage)->sin_addr));
+                    break;
+                case AF_INET6:
+                    std::copy(reinterpret_cast<const char*>(src),
+                        reinterpret_cast<const char*>(src) + sizeof(sockaddr_in6::sin6_addr),
+                        buffer);
+                    std::copy(reinterpret_cast<const in6_addr*>(buffer),
+                        reinterpret_cast<const in6_addr*>(buffer) + sizeof(in6_addr),
+                        reinterpret_cast<in6_addr*>(
+                        &reinterpret_cast<sockaddr_in6*>(&sockAddrStorage)->sin6_addr));
+                    break;
+                default:
+                    throw exception::UnknownAddressFamilyException(FUNC_NAME);
             }
 
-            if (WSAAddressToStringA(reinterpret_cast<sockaddr*>(&sockAddrStorage),
-                                    sizeof(sockAddrStorage),
-                                    nullptr,
-                                    dst,
-                                    &s) != 0) {
+            if(WSAAddressToStringA(reinterpret_cast<sockaddr*>(&sockAddrStorage),
+                sizeof(sockAddrStorage),
+                nullptr,
+                dst,
+                &s) != 0) {
                 throw exception::ExceptionWithSystemErrorMessage(
                     FUNC_NAME, "Could not convert address to human readable format");
             }
@@ -227,28 +227,37 @@ namespace cppnetlib {
 
             std::copy(src, src + INET6_ADDRSTRLEN + 1U, scrCopy);
 
-            if (WSAStringToAddressA(
-                    scrCopy, addressFamily, nullptr, (struct sockaddr*)&sockAddrStorage, &size) == 0) {
-                switch (addressFamily) {
-                case AF_INET:
-                    *reinterpret_cast<in_addr*>(dst) =
-                        (reinterpret_cast<sockaddr_in*>(&sockAddrStorage))->sin_addr;
-                    break;
-                case AF_INET6:
-                    *reinterpret_cast<in6_addr*>(dst) =
-                        (reinterpret_cast<sockaddr_in6*>(&sockAddrStorage))->sin6_addr;
-                    break;
-                default:
-                    throw exception::UnknownAddressFamilyException(FUNC_NAME);
+            if(WSAStringToAddressA(
+                scrCopy, addressFamily, nullptr, (struct sockaddr*)&sockAddrStorage, &size) == 0) {
+                switch(addressFamily) {
+                    case AF_INET:
+                        *reinterpret_cast<in_addr*>(dst) =
+                            (reinterpret_cast<sockaddr_in*>(&sockAddrStorage))->sin_addr;
+                        break;
+                    case AF_INET6:
+                        *reinterpret_cast<in6_addr*>(dst) =
+                            (reinterpret_cast<sockaddr_in6*>(&sockAddrStorage))->sin6_addr;
+                        break;
+                    default:
+                        throw exception::UnknownAddressFamilyException(FUNC_NAME);
                 }
             } else {
                 throw exception::ExceptionWithSystemErrorMessage(
                     FUNC_NAME, "Could not convert address to network format");
             }
         }
+
+        void nativeGetSockOpt(const platform::SocketT socket, const int level, const int optName, void* opt, int* optLen) {
+            assert(opt != nullptr);
+            assert(optLen != nullptr);
+            if(getsockopt(socket, level, optName, reinterpret_cast<char*>(opt), optLen) != 0) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                    "Could not perform getsockopt");
+            }
+        }
     } // namespace platform
 
-#elif defined PLATFORM_LINUX
+    #elif defined PLATFORM_LINUX
 
     namespace error {
         std::string toString(const NativeErrorCodeT value) { return std::strerror(value); }
@@ -259,20 +268,20 @@ namespace cppnetlib {
 
         SocketT nativeSocketOpen(const NativeFamilyT addressFamily, const int ipProtocol) {
             int type = 0;
-            switch (ipProtocol) {
-            case IPPROTO_TCP:
-                type = SOCK_STREAM;
-                break;
-            case IPPROTO_UDP:
-                type = SOCK_DGRAM;
-                break;
-            default:
-                assert(false);
-                throw Exception(FUNC_NAME + ": Unknown addressFamily value");
+            switch(ipProtocol) {
+                case IPPROTO_TCP:
+                    type = SOCK_STREAM;
+                    break;
+                case IPPROTO_UDP:
+                    type = SOCK_DGRAM;
+                    break;
+                default:
+                    assert(false);
+                    throw Exception(FUNC_NAME + ": Unknown addressFamily value");
             }
 
             const platform::SocketT socket = ::socket(addressFamily, type, ipProtocol);
-            if (socket == INVALID_SOCKET_DESCRIPTOR) {
+            if(socket == INVALID_SOCKET_DESCRIPTOR) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not create socket");
             }
 
@@ -280,36 +289,36 @@ namespace cppnetlib {
         }
 
         void nativeSocketClose(platform::SocketT socket) {
-            if (::shutdown(socket, CPPNL_SHUT_RDWR) != 0) {
+            if(::shutdown(socket, CPPNL_SHUT_RDWR) != 0) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not shutdown socket");
             }
 
-            if (::close(socket) != SOCKET_OP_SUCCESSFUL) {
+            if(::close(socket) != SOCKET_OP_SUCCESSFUL) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
             }
         }
 
         error::IOReturnValue nativeConnect(platform::SocketT& socket, const Address& address) {
             const sockaddr sockAddr = createSockAddr(address);
-            if (::connect(socket, &sockAddr, helpers::toSockLen(address)) != SOCKET_OP_SUCCESSFUL) {
-                if (nativeErrorCode() == EWOULDBLOCK) {
+            if(::connect(socket, &sockAddr, helpers::toSockLen(address)) != SOCKET_OP_SUCCESSFUL) {
+                if(nativeErrorCode() == EWOULDBLOCK) {
                     return error::IOReturnValue::OpWouldBlock;
                 }
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                 "Could not connect to the server");
+                    "Could not connect to the server");
             }
             return error::IOReturnValue::Successful;
         }
 
         bool nativeSetBlocked(platform::SocketT socket, const bool blocked) {
             int flags = fcntl(socket, F_GETFL, 0);
-            if (flags == -1) {
+            if(flags == -1) {
                 return false;
             }
 
             flags = blocked ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK);
 
-            if (fcntl(socket, F_SETFL, flags) == -1) {
+            if(fcntl(socket, F_SETFL, flags) == -1) {
                 return false;
             }
             return true;
@@ -320,74 +329,86 @@ namespace cppnetlib {
             assert(dst != nullptr);
             const int retv = inet_pton(addressFamily, src, dst);
 
-            if (retv == 0) {
+            if(retv == 0) {
                 throw Exception(FUNC_NAME +
-                                ": Could not convert address to network format, because the input string is "
-                                "not valid address");
-            } else if (retv == -1) {
+                    ": Could not convert address to network format, because the input string is "
+                    "not valid address");
+            } else if(retv == -1) {
                 throw Exception(
                     FUNC_NAME +
                     ": Could not convert address to network format, because the IP version is unknown");
-            } else if (retv != 1) {
+            } else if(retv != 1) {
                 throw exception::ExceptionWithSystemErrorMessage(
                     FUNC_NAME, "Could not convert address to network format");
             } // else: Operation successful
         }
 
         inline void nativeInetNtop(const NativeFamilyT addressFamily,
-                                   const void* src,
-                                   char* dst,
-                                   const std::size_t dstMaxSize) {
-            if (inet_ntop(addressFamily, src, dst, dstMaxSize) == nullptr) {
+            const void* src,
+            char* dst,
+            const std::size_t dstMaxSize) {
+            if(inet_ntop(addressFamily, src, dst, dstMaxSize) == nullptr) {
                 throw exception::ExceptionWithSystemErrorMessage(
                     FUNC_NAME, "Could not convert network address to human readable format");
             }
         }
+
+        void nativeGetSockOpt(const platform::SocketT socket, const int level, const int optName, void* opt, int* optLen) {
+            assert(opt != nullptr);
+            assert(optLen != nullptr);
+
+            static_assert(sizeof(int) == sizeof(socklen_t), "Incompatible type size");
+
+            if(getsockopt(socket, level, optName, opt, reinterpret_cast<socklen_t*>(optLen)) != 0) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                    "Could not perform getsockopt");
+            }
+        }
     } // namespace platform
 
-#else
+    #else
 
-#error Unsupported platform!
+    #error Unsupported platform!
 
-#endif
+    #endif
 
-    // Helpers
+        // Helpers
 
     namespace helpers {
         platform::NativeFamilyT toNativeFamily(const IPVer ipVersion) {
-            switch (ipVersion) {
-            case IPVer::IPv4:
-                return AF_INET;
-            case IPVer::IPv6:
-                return AF_INET6;
-            default:
-                assert(false);
-                throw exception::UnknownAddressFamilyException(FUNC_NAME);
+            switch(ipVersion) {
+                case IPVer::IPv4:
+                    return AF_INET;
+                case IPVer::IPv6:
+                    return AF_INET6;
+                default:
+                    assert(false);
+                    throw exception::UnknownAddressFamilyException(FUNC_NAME);
             }
         }
 
         platform::SockLenT toSockLen(const IPVer ipVersion) {
-            switch (ipVersion) {
-            case IPVer::IPv4:
-                return sizeof(sockaddr_in);
-            case IPVer::IPv6:
-                return sizeof(sockaddr_in6);
-            default:
-                assert(false);
-                throw Exception(FUNC_NAME + ": Unknown IPVer value");
+            switch(ipVersion) {
+                case IPVer::IPv4:
+                    return sizeof(sockaddr_in);
+                case IPVer::IPv6:
+                    return sizeof(sockaddr_in6);
+                default:
+                    assert(false);
+                    throw Exception(FUNC_NAME + ": Unknown IPVer value");
             }
         }
 
         platform::SockLenT toSockLen(const Address& address) { return toSockLen(address.ip().version()); }
 
         IPVer toIPVer(const platform::NativeFamilyT addressFamily) {
-            switch (addressFamily) {
-            case AF_INET:
-                return IPVer::IPv4;
-            case AF_INET6:
-                return IPVer::IPv6;
-            default:
-                throw exception::UnknownAddressFamilyException(FUNC_NAME);
+            switch(addressFamily) {
+                case AF_INET:
+                    return IPVer::IPv4;
+                case AF_INET6:
+                    return IPVer::IPv6;
+                default:
+                    throw exception::UnknownAddressFamilyException(FUNC_NAME);
             }
         }
     } // namespace helpers
@@ -449,12 +470,12 @@ namespace cppnetlib {
     }
 
     Ip& Ip::operator=(const std::string& ip) {
-        if (ip.empty()) {
+        if(ip.empty()) {
             mIpStr.clear();
         } else {
-            if (isIpV4Addr(ip)) {
+            if(isIpV4Addr(ip)) {
                 mIpVer = IPVer::IPv4;
-            } else if (isIpV6Addr(ip)) {
+            } else if(isIpV6Addr(ip)) {
                 mIpVer = IPVer::IPv6;
             } else {
                 throw Exception("Invalid IP format");
@@ -470,7 +491,7 @@ namespace cppnetlib {
         struct sockaddr_in sa;
         try {
             platform::nativeInetPton(AF_INET, ip.c_str(), &sa);
-        } catch (const exception::UnknownAddressFamilyException&) {
+        } catch(const exception::UnknownAddressFamilyException&) {
             return false;
         }
         return true;
@@ -480,7 +501,7 @@ namespace cppnetlib {
         struct sockaddr_in6 sa;
         try {
             platform::nativeInetPton(AF_INET6, ip.c_str(), &sa);
-        } catch (const exception::UnknownAddressFamilyException&) {
+        } catch(const exception::UnknownAddressFamilyException&) {
             return false;
         }
         return true;
@@ -524,27 +545,29 @@ namespace cppnetlib {
     sockaddr createSockAddr(const Address& address) {
         sockaddr sockAddr = {};
 
-        switch (address.ip().version()) {
-        case IPVer::IPv4: {
-            sockaddr_in& ipv4addr = reinterpret_cast<sockaddr_in&>(sockAddr);
-            ipv4addr.sin_family = helpers::toNativeFamily(address.ip().version());
-            ipv4addr.sin_port = Endian::convertNativeTo(address.port(), Endian::Type::Big);
-            platform::nativeInetPton(helpers::toNativeFamily(address.ip().version()),
-                                     address.ip().string().c_str(),
-                                     &ipv4addr.sin_addr);
-            break;
-        }
-        case IPVer::IPv6: {
-            sockaddr_in6& ipv6addr = reinterpret_cast<sockaddr_in6&>(sockAddr);
-            ipv6addr.sin6_family = helpers::toNativeFamily(address.ip().version());
-            ipv6addr.sin6_port = Endian::convertNativeTo(address.port(), Endian::Type::Big);
-            platform::nativeInetPton(helpers::toNativeFamily(address.ip().version()),
-                                     address.ip().string().c_str(),
-                                     &ipv6addr.sin6_addr);
-            break;
-        }
-        default:
-            throw Exception(FUNC_NAME + ": Unknown IPVer value");
+        switch(address.ip().version()) {
+            case IPVer::IPv4:
+            {
+                sockaddr_in& ipv4addr = reinterpret_cast<sockaddr_in&>(sockAddr);
+                ipv4addr.sin_family = helpers::toNativeFamily(address.ip().version());
+                ipv4addr.sin_port = Endian::convertNativeTo(address.port(), Endian::Type::Big);
+                platform::nativeInetPton(helpers::toNativeFamily(address.ip().version()),
+                    address.ip().string().c_str(),
+                    &ipv4addr.sin_addr);
+                break;
+            }
+            case IPVer::IPv6:
+            {
+                sockaddr_in6& ipv6addr = reinterpret_cast<sockaddr_in6&>(sockAddr);
+                ipv6addr.sin6_family = helpers::toNativeFamily(address.ip().version());
+                ipv6addr.sin6_port = Endian::convertNativeTo(address.port(), Endian::Type::Big);
+                platform::nativeInetPton(helpers::toNativeFamily(address.ip().version()),
+                    address.ip().string().c_str(),
+                    &ipv6addr.sin6_addr);
+                break;
+            }
+            default:
+                throw Exception(FUNC_NAME + ": Unknown IPVer value");
         }
         return sockAddr;
     }
@@ -553,21 +576,23 @@ namespace cppnetlib {
         PortT port;
         char ipBuffer[40] = {};
 
-        switch (sockAddr.sa_family) {
-        case AF_INET: {
-            const sockaddr_in& ipv4addr = reinterpret_cast<const sockaddr_in&>(sockAddr);
-            port = Endian::convertToNative(ipv4addr.sin_port, Endian::Type::Big);
-            platform::nativeInetNtop(AF_INET, &ipv4addr.sin_addr, ipBuffer, sizeof(ipBuffer));
-            break;
-        }
-        case AF_INET6: {
-            const sockaddr_in6& ipv6addr = reinterpret_cast<const sockaddr_in6&>(sockAddr);
-            port = Endian::convertToNative(ipv6addr.sin6_port, Endian::Type::Big);
-            platform::nativeInetNtop(AF_INET, &ipv6addr.sin6_addr, ipBuffer, sizeof(ipBuffer));
-            break;
-        }
-        default:
-            throw exception::UnknownAddressFamilyException(FUNC_NAME);
+        switch(sockAddr.sa_family) {
+            case AF_INET:
+            {
+                const sockaddr_in& ipv4addr = reinterpret_cast<const sockaddr_in&>(sockAddr);
+                port = Endian::convertToNative(ipv4addr.sin_port, Endian::Type::Big);
+                platform::nativeInetNtop(AF_INET, &ipv4addr.sin_addr, ipBuffer, sizeof(ipBuffer));
+                break;
+            }
+            case AF_INET6:
+            {
+                const sockaddr_in6& ipv6addr = reinterpret_cast<const sockaddr_in6&>(sockAddr);
+                port = Endian::convertToNative(ipv6addr.sin6_port, Endian::Type::Big);
+                platform::nativeInetNtop(AF_INET, &ipv6addr.sin6_addr, ipBuffer, sizeof(ipBuffer));
+                break;
+            }
+            default:
+                throw exception::UnknownAddressFamilyException(FUNC_NAME);
         }
         return Address(ipBuffer, port);
     }
@@ -601,10 +626,10 @@ namespace cppnetlib {
 
         SocketBase::~SocketBase() {
             try {
-                if (this->isSocketOpen()) {
+                if(this->isSocketOpen()) {
                     this->close();
                 }
-            } catch (...) {
+            } catch(...) {
             }
         }
 
@@ -615,33 +640,33 @@ namespace cppnetlib {
         }
 
         void SocketBase::close() {
-            if (!isSocketOpen()) {
+            if(!isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not close socket, because the socket is already closed");
             }
             platform::nativeSocketClose(mSocket);
         }
 
         void SocketBase::bind(const Address& address) {
-            if (!isSocketOpen()) {
+            if(!isSocketOpen()) {
                 openSocket(address.ip().version());
             }
 
             const sockaddr sockAddr = createSockAddr(address);
             const platform::NetLibRetvT retv = ::bind(mSocket, &sockAddr, helpers::toSockLen(address));
-            if (retv == SOCKET_OP_UNSUCCESSFUL) {
+            if(retv == SOCKET_OP_UNSUCCESSFUL) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                 "Could not bind address to socket");
-            } else if (retv != SOCKET_OP_SUCCESSFUL) {
+                    "Could not bind address to socket");
+            } else if(retv != SOCKET_OP_SUCCESSFUL) {
                 throw Exception(FUNC_NAME + ": Unknown error occured");
             } // else: Operation successful
         }
 
         void SocketBase::setBlocked(const bool blocked) {
-            if (!isSocketOpen()) {
+            if(!isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Socket is not open");
             }
 
-            if (!platform::nativeSetBlocked(mSocket, blocked)) {
+            if(!platform::nativeSetBlocked(mSocket, blocked)) {
                 throw exception::ExceptionWithSystemErrorMessage(
                     FUNC_NAME, "Could not set blocking/non-blocking socket property");
             }
@@ -654,98 +679,112 @@ namespace cppnetlib {
         bool SocketBase::isSocketOpen() const { return mSocket != INVALID_SOCKET_DESCRIPTOR; }
 
         bool SocketBase::rwTimeout(const OpTimeout selectTimeoutFor, const Timeout timeout) const {
-            if (!isSocketOpen()) {
+            if(!isSocketOpen()) {
                 throw Exception(FUNC_NAME +
-                                ": Could not perform connect/accept timeout, because the socket is not open");
+                    ": Could not perform connect/accept timeout, because the socket is not open");
             }
 
             fd_set fdSet;
+            fd_set fdErrorSet;
             fd_set* fdWritePtr = nullptr;
             fd_set* fdReadPtr = nullptr;
 
-            switch (selectTimeoutFor) {
-            case OpTimeout::Write:
-                fdWritePtr = &fdSet;
-                break;
-            case OpTimeout::Read:
-                fdReadPtr = &fdSet;
-                break;
-            default:
-                throw Exception("Unknown value of SelectTimeout");
+            switch(selectTimeoutFor) {
+                case OpTimeout::Write:
+                    fdWritePtr = &fdSet;
+                    break;
+                case OpTimeout::Read:
+                    fdReadPtr = &fdSet;
+                    break;
+                default:
+                    throw Exception("Unknown value of SelectTimeout");
             }
 
             FD_ZERO(&fdSet);
             FD_SET(mSocket, &fdSet);
 
+            FD_ZERO(&fdErrorSet);
+            FD_SET(mSocket, &fdErrorSet);
+
             timeval tv;
             tv.tv_sec = timeout / 1000;
             tv.tv_usec = timeout % 1000 * 1000;
 
-            const int selectRetv = select(static_cast<int>(mSocket + 1), fdReadPtr, fdWritePtr, nullptr, &tv);
-            if (selectRetv == 0) {
+            const int selectRetv = select(static_cast<int>(mSocket + 1), fdReadPtr, fdWritePtr, &fdErrorSet, &tv);
+            if(selectRetv == 0) {
                 return true;
-            } else if (selectRetv == SOCKET_OP_UNSUCCESSFUL) {
+            } else if(selectRetv == SOCKET_OP_UNSUCCESSFUL) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not perform select");
             } else {
-                if (FD_ISSET(mSocket, &fdSet) <= 0) {
+                if(FD_ISSET(mSocket, &fdSet) <= 0) {
                     throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                     "Could not connect to the server");
+                        "Could not connect to the server");
                 }
             }
+
+            if(FD_ISSET(mSocket, &fdErrorSet)) {
+                int err = 0;
+                int optLen = sizeof(err);
+
+                platform::nativeGetSockOpt(mSocket, SOL_SOCKET, SO_ERROR, &err, &optLen);
+
+                return true;
+            }
+
             return false;
         }
 
         void SocketBase::setWriteReadTimeout(const OpTimeout opTimeoutFor, const Timeout timeout) {
-            if (!isSocketOpen()) {
+            if(!isSocketOpen()) {
                 throw Exception(FUNC_NAME +
-                                ": Could not set write/read timeout, because the socket is not open");
+                    ": Could not set write/read timeout, because the socket is not open");
             }
 
-#if defined PLATFORM_WINDOWS
-            switch (opTimeoutFor) {
-            case OpTimeout::Write:
-                if (setsockopt(mSocket,
-                               SOL_SOCKET,
-                               SO_SNDTIMEO,
-                               reinterpret_cast<const char*>(&timeout),
-                               sizeof(timeout)) != 0) {
-                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                     "Could not set write operation timeout");
-                }
-                break;
-            case OpTimeout::Read:
-                if (setsockopt(mSocket,
-                               SOL_SOCKET,
-                               SO_RCVTIMEO,
-                               reinterpret_cast<const char*>(&timeout),
-                               sizeof(timeout)) != 0) {
-                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                     "Could not set read operation timeout");
-                }
-                break;
-            default:
-                throw Exception("Unknown OpTimeout value");
+            #if defined PLATFORM_WINDOWS
+            switch(opTimeoutFor) {
+                case OpTimeout::Write:
+                    if(setsockopt(mSocket,
+                        SOL_SOCKET,
+                        SO_SNDTIMEO,
+                        reinterpret_cast<const char*>(&timeout),
+                        sizeof(timeout)) != 0) {
+                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                            "Could not set write operation timeout");
+                    }
+                    break;
+                case OpTimeout::Read:
+                    if(setsockopt(mSocket,
+                        SOL_SOCKET,
+                        SO_RCVTIMEO,
+                        reinterpret_cast<const char*>(&timeout),
+                        sizeof(timeout)) != 0) {
+                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                            "Could not set read operation timeout");
+                    }
+                    break;
+                default:
+                    throw Exception("Unknown OpTimeout value");
             }
-#elif defined PLATFORM_LINUX
-            switch (opTimeoutFor) {
-            case OpTimeout::Write:
-                if (setsockopt(mSocket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) != 0) {
-                    exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                               "Could not set write operation timeout");
-                }
-                break;
-            case OpTimeout::Read:
-                if (setsockopt(mSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
-                    exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                               "Could not set read operation timeout");
-                }
-                break;
-            default:
-                throw Exception("Unknown OpTimeout value");
+            #elif defined PLATFORM_LINUX
+            switch(opTimeoutFor) {
+                case OpTimeout::Write:
+                    if(setsockopt(mSocket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) != 0) {
+                        exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                            "Could not set write operation timeout");
+                    }
+                    break;
+                case OpTimeout::Read:
+                    if(setsockopt(mSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
+                        exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                            "Could not set read operation timeout");
+                    }
+                    break;
+                default:
+                    throw Exception("Unknown OpTimeout value");
             }
-#else
-#error Unsupported platform
-#endif
+            #else
+            #error Unsupported platform
+            #endif
         }
 
         TCPSocketBase::TCPSocketBase()
@@ -753,29 +792,31 @@ namespace cppnetlib {
             , mSendTimeout(DEFAULT_TCP_SEND_TIMEOUT)
             , mRecvTimeout(DEFAULT_TCP_RECV_TIMEOUT)
             , mConnectTimeout(DEFAULT_TCP_CONNECT_TIMEOUT)
-            , mAcceptTimeout(DEFAULT_TCP_ACCEPT_TIMEOUT) {}
+            , mAcceptTimeout(DEFAULT_TCP_ACCEPT_TIMEOUT)
+            , mNagle(true) {}
 
         TCPSocketBase::TCPSocketBase(TCPSocketBase&& other)
-            : SocketBase(std::move(dynamic_cast<SocketBase&>(other)))
+            : SocketBase(std::move(other))
             , mSendTimeout(std::move(other.mSendTimeout))
             , mRecvTimeout(std::move(other.mRecvTimeout))
             , mConnectTimeout(std::move(other.mConnectTimeout))
-            , mAcceptTimeout(std::move(other.mAcceptTimeout)) {}
+            , mAcceptTimeout(std::move(other.mAcceptTimeout))
+            , mNagle(std::move(other.mNagle)) {}
 
         TCPSocketBase::TCPSocketBase(platform::SocketT&& socket)
-            : SocketBase(std::move(socket))
+            : SocketBase(std::exchange(socket, INVALID_SOCKET_DESCRIPTOR))
             , mSendTimeout(DEFAULT_TCP_SEND_TIMEOUT)
             , mRecvTimeout(DEFAULT_TCP_RECV_TIMEOUT)
             , mConnectTimeout(DEFAULT_TCP_CONNECT_TIMEOUT)
-            , mAcceptTimeout(DEFAULT_TCP_ACCEPT_TIMEOUT) {
-            socket = INVALID_SOCKET_DESCRIPTOR;
-        }
+            , mAcceptTimeout(DEFAULT_TCP_ACCEPT_TIMEOUT)
+            , mNagle(nagle_(mSocket)) {}
 
         TCPSocketBase& TCPSocketBase::operator=(TCPSocketBase&& other) {
             mSendTimeout = std::move(other.mSendTimeout);
             mRecvTimeout = std::move(other.mRecvTimeout);
             mConnectTimeout = std::move(other.mConnectTimeout);
             mAcceptTimeout = std::move(other.mAcceptTimeout);
+            mNagle = std::move(other.mNagle);
 
             SocketBase::operator=(std::move(static_cast<base::SocketBase&>(other)));
 
@@ -785,7 +826,7 @@ namespace cppnetlib {
         TCPSocketBase::~TCPSocketBase() {}
 
         void TCPSocketBase::openSocket(const IPVer ipVer) {
-            if (isSocketOpen()) {
+            if(isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not open socket, the socket is already open");
             }
             mSocket = platform::nativeSocketOpen(helpers::toNativeFamily(ipVer), IPPROTO_TCP);
@@ -793,89 +834,117 @@ namespace cppnetlib {
             setBlocked(false);
         }
 
+        void TCPSocketBase::nagle_(const platform::SocketT socket, const bool enable) {
+            const int flag = enable ? 1 : 0;
+            if(setsockopt(socket
+                , IPPROTO_TCP
+                , TCP_NODELAY
+                , reinterpret_cast<const char*>(&flag)
+                , sizeof(flag)) != 0) {
+                throw exception::ExceptionWithSystemErrorMessage(
+                    FUNC_NAME,
+                    std::string("Could not ") + (enable ? "enable" : "disable") + " Nagle's algorithm");
+            }
+        }
+
+        bool TCPSocketBase::nagle_(const platform::SocketT socket) {
+            int flag = 0;
+            int optlen = sizeof(flag);
+            if(getsockopt(socket
+                , IPPROTO_TCP
+                , TCP_NODELAY
+                , reinterpret_cast<char*>(&flag)
+                , &optlen) != 0) {
+                throw exception::ExceptionWithSystemErrorMessage(
+                    FUNC_NAME,
+                    "Could not get Nagle's algorithm state");
+            }
+            return flag ? false : true;
+        }
+
         ConnectResult TCPSocketBase::connect(const Address& address) {
-            if (!isSocketOpen()) {
+            if(!isSocketOpen()) {
                 openSocket(address.ip().version());
             }
 
             const error::IOReturnValue errorCode = platform::nativeConnect(mSocket, address);
-            switch (errorCode) {
-            case error::IOReturnValue::Successful:
-                return true;
-            case error::IOReturnValue::OpWouldBlock:
-                if (getConnectTimeout() > 0 && rwTimeout(OpTimeout::Write, getConnectTimeout())) {
-                    return error::makeError<bool, error::ConnectReturnValue>(
-                        error::ConnectReturnValue::OperationTimedOut);
-                } else {
-                    return error::makeError<bool, error::ConnectReturnValue>(
-                        error::ConnectReturnValue::OpWouldBlock);
-                }
-                break;
-            default:
-                assert(false);
-                throw Exception("Unknown error code " + std::to_string(static_cast<int>(errorCode)));
+            switch(errorCode) {
+                case error::IOReturnValue::Successful:
+                    return true;
+                case error::IOReturnValue::OpWouldBlock:
+                    if(getConnectTimeout() > 0 && rwTimeout(OpTimeout::Write, getConnectTimeout())) {
+                        return error::makeError<bool, error::ConnectReturnValue>(
+                            error::ConnectReturnValue::OperationTimedOut);
+                    } else {
+                        if(rwTimeout(OpTimeout::Write, mConnectTimeout)) {
+                            return error::makeError<bool, error::ConnectReturnValue>(
+                                error::ConnectReturnValue::OpWouldBlock);
+                        } else {
+                            return true;
+                        }
+                    }
+                    break;
+                default:
+                    assert(false);
+                    throw Exception("Unknown error code " + std::to_string(static_cast<int>(errorCode)));
             }
         }
 
         void TCPSocketBase::listen(const std::size_t backlogSize) const {
-            if (!isSocketOpen()) {
+            if(!isSocketOpen()) {
                 throw Exception(FUNC_NAME +
-                                ": Could not open socket for listening, because the socket is not open");
+                    ": Could not open socket for listening, because the socket is not open");
             }
 
-            if (::listen(mSocket,
-                         static_cast<int>(std::min<std::size_t>(std::numeric_limits<int>::max(),
-                                                                backlogSize))) != SOCKET_OP_SUCCESSFUL) {
+            if(::listen(mSocket,
+                static_cast<int>(std::min<std::size_t>(std::numeric_limits<int>::max(),
+                backlogSize))) != SOCKET_OP_SUCCESSFUL) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                                                                 "Could not open socket for listening");
+                    "Could not open socket for listening");
             }
         }
 
         void TCPSocketBase::tryAccept(
-            const std::function<void(platform::SocketT&& sock, Address&& address, void* userArg)>& onAccept,
+            const std::function<void(platform::SocketT&&, Address&&, void*)>& onAccept,
             void* userArg) const {
             sockaddr addr = {};
 
-            if (rwTimeout(OpTimeout::Read, mAcceptTimeout)) {
+            if(rwTimeout(OpTimeout::Read, mAcceptTimeout)) {
                 return;
             }
 
             platform::SockLenT sockLen = helpers::toSockLen(IPVer::IPv6 /*Max sockaddr size*/);
             platform::SocketT socket = ::accept(mSocket, &addr, &sockLen);
-            if (socket == INVALID_SOCKET_DESCRIPTOR) {
-                if (platform::nativeErrorCode() != CPPNL_OPWOULDBLOCK) {
+            if(socket == INVALID_SOCKET_DESCRIPTOR) {
+                if(platform::nativeErrorCode() != CPPNL_OPWOULDBLOCK) {
                     throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not accept client");
+                } else {
+                    return;
                 }
             }
 
             onAccept(std::move(socket), createAddress(addr), userArg);
         }
 
-        void TCPSocketBase::tryAccept(
-            std::function<void(platform::SocketT&& sock, Address&& address, void* userArg)>&& onAccept,
-            void* userArg) const {
-            tryAccept(onAccept, userArg);
-        }
-
         IOResult TCPSocketBase::send(const TransmitDataT* data, const std::size_t size) {
             assert(data != nullptr);
-            if (!isSocketOpen()) {
+            if(!isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not send data, because the socket is not open");
             }
 
-            if (rwTimeout(OpTimeout::Write, mSendTimeout)) {
+            if(rwTimeout(OpTimeout::Write, mSendTimeout)) {
                 return error::makeError<std::size_t, error::IOReturnValue>(
                     error::IOReturnValue::OperationTimedOut);
             }
 
             const platform::NetLibRetvT retv =
                 ::send(mSocket,
-                       reinterpret_cast<const platform::NativeTransmitDataT*>(data),
-                       static_cast<platform::IoDataSizeT>(
-                           std::min<std::size_t>(static_cast<std::size_t>(cMaxTransmitionUnitSize), size)),
-                       0);
-            if (retv == SOCKET_OP_UNSUCCESSFUL) {
-                if (platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
+                reinterpret_cast<const platform::NativeTransmitDataT*>(data),
+                static_cast<platform::IoDataSizeT>(
+                std::min<std::size_t>(static_cast<std::size_t>(cMaxTransmitionUnitSize), size)),
+                0);
+            if(retv == SOCKET_OP_UNSUCCESSFUL) {
+                if(platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
                     return error::makeError<std::size_t, error::IOReturnValue>(
                         error::IOReturnValue::OpWouldBlock);
                 }
@@ -889,33 +958,33 @@ namespace cppnetlib {
 
         IOResult TCPSocketBase::receive(TransmitDataT* data, const std::size_t maxSize) {
             assert(data != nullptr);
-            if (!isSocketOpen()) {
+            if(!isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not receive data, because the socket is not open");
             }
 
-            if (rwTimeout(OpTimeout::Read, mRecvTimeout)) {
+            if(rwTimeout(OpTimeout::Read, mRecvTimeout)) {
                 return error::makeError<std::size_t, error::IOReturnValue>(
                     error::IOReturnValue::OperationTimedOut);
             }
 
             const platform::NetLibRetvT retv =
                 ::recv(mSocket,
-                       reinterpret_cast<platform::NativeTransmitDataT*>(data),
-                       static_cast<platform::IoDataSizeT>(
-                           std::min<std::size_t>(static_cast<std::size_t>(cMaxTransmitionUnitSize), maxSize)),
-                       0);
+                reinterpret_cast<platform::NativeTransmitDataT*>(data),
+                static_cast<platform::IoDataSizeT>(
+                std::min<std::size_t>(static_cast<std::size_t>(cMaxTransmitionUnitSize), maxSize)),
+                0);
 
-            if (retv == SOCKET_OP_UNSUCCESSFUL) {
-                if (platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
+            if(retv == SOCKET_OP_UNSUCCESSFUL) {
+                if(platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
                     return error::makeError<std::size_t, error::IOReturnValue>(
                         error::IOReturnValue::OpWouldBlock);
-                } else if (platform::nativeErrorCode() == CPPNL_FORCEDISCONNECT ||
-                           platform::nativeErrorCode() == CPPNL_CONNECTIONABORT) {
+                } else if(platform::nativeErrorCode() == CPPNL_FORCEDISCONNECT ||
+                    platform::nativeErrorCode() == CPPNL_CONNECTIONABORT) {
                     return error::makeError<std::size_t, error::IOReturnValue>(
                         error::IOReturnValue::ForciblyDisconnected);
                 }
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not recv data");
-            } else if (retv == 0) {
+            } else if(retv == 0) {
                 return error::makeError<std::size_t, error::IOReturnValue>(
                     error::IOReturnValue::GracefullyDisconnected);
             }
@@ -925,24 +994,38 @@ namespace cppnetlib {
             return static_cast<std::size_t>(retv);
         }
 
+        void TCPSocketBase::nagle(const bool enable) {
+            mNagle = enable;
+
+            if(!isSocketOpen()) {
+                return;
+            }
+
+            nagle_(mSocket, enable);
+        }
+
+        bool TCPSocketBase::nagle() const {
+            return mNagle;
+        }
+
         void TCPSocketBase::setTimeout(const TCPTimeoutFor timeoutFor, const Timeout timeoutMs) {
-            switch (timeoutFor) {
-            case TCPTimeoutFor::Send:
-                mSendTimeout = timeoutMs;
-                // setWriteReadTimeout(OpTimeout::Write, timeoutMs);
-                break;
-            case TCPTimeoutFor::Recieve:
-                mRecvTimeout = timeoutMs;
-                // setWriteReadTimeout(OpTimeout::Read, timeoutMs);
-                break;
-            case TCPTimeoutFor::Connect:
-                mConnectTimeout = timeoutMs;
-                break;
-            case TCPTimeoutFor::Accept:
-                mAcceptTimeout = timeoutMs;
-                break;
-            default:
-                throw Exception("Unknwon TCPTimeoutFor value");
+            switch(timeoutFor) {
+                case TCPTimeoutFor::Send:
+                    mSendTimeout = timeoutMs;
+                    // setWriteReadTimeout(OpTimeout::Write, timeoutMs);
+                    break;
+                case TCPTimeoutFor::Recieve:
+                    mRecvTimeout = timeoutMs;
+                    // setWriteReadTimeout(OpTimeout::Read, timeoutMs);
+                    break;
+                case TCPTimeoutFor::Connect:
+                    mConnectTimeout = timeoutMs;
+                    break;
+                case TCPTimeoutFor::Accept:
+                    mAcceptTimeout = timeoutMs;
+                    break;
+                default:
+                    throw Exception("Unknwon TCPTimeoutFor value");
             }
         }
 
@@ -952,14 +1035,14 @@ namespace cppnetlib {
             , mRecvFromTimeout(DEFAULT_UDP_RECVFROM_TIMEOUT) {}
 
         UDPSocketBase::UDPSocketBase(UDPSocketBase&& other)
-            : SocketBase(std::move(dynamic_cast<SocketBase&>(other)))
+            : SocketBase(std::move(other))
             , mSendToTimeout(std::move(other.mSendToTimeout))
             , mRecvFromTimeout(std::move(other.mRecvFromTimeout)) {}
 
         UDPSocketBase::~UDPSocketBase() {}
 
         void UDPSocketBase::openSocket(const IPVer ipVer) {
-            if (isSocketOpen()) {
+            if(isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not open socket, the socket is already open");
             }
             mSocket = platform::nativeSocketOpen(helpers::toNativeFamily(ipVer), IPPROTO_UDP);
@@ -968,14 +1051,14 @@ namespace cppnetlib {
         }
 
         IOResult
-        UDPSocketBase::sendTo(const TransmitDataT* data, const std::size_t size, const Address& address) {
+            UDPSocketBase::sendTo(const TransmitDataT* data, const std::size_t size, const Address& address) {
             assert(data != nullptr);
 
-            if (!isSocketOpen()) {
+            if(!isSocketOpen()) {
                 openSocket(address.ip().version());
             }
 
-            if (rwTimeout(OpTimeout::Write, mSendToTimeout)) {
+            if(rwTimeout(OpTimeout::Write, mSendToTimeout)) {
                 return error::makeError<std::size_t, error::IOReturnValue>(
                     error::IOReturnValue::OperationTimedOut);
             }
@@ -983,15 +1066,15 @@ namespace cppnetlib {
             const sockaddr sockAddr = createSockAddr(address);
             const platform::NetLibRetvT retv =
                 ::sendto(mSocket,
-                         reinterpret_cast<const platform::NativeTransmitDataT*>(data),
-                         static_cast<platform::IoDataSizeT>(
-                             std::min<std::size_t>(static_cast<std::size_t>(cMaxTransmitionUnitSize), size)),
-                         0,
-                         &sockAddr,
-                         helpers::toSockLen(address));
+                reinterpret_cast<const platform::NativeTransmitDataT*>(data),
+                static_cast<platform::IoDataSizeT>(
+                std::min<std::size_t>(static_cast<std::size_t>(cMaxTransmitionUnitSize), size)),
+                0,
+                &sockAddr,
+                helpers::toSockLen(address));
 
-            if (retv == SOCKET_OP_UNSUCCESSFUL) {
-                if (platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
+            if(retv == SOCKET_OP_UNSUCCESSFUL) {
+                if(platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
                     return error::makeError<std::size_t, error::IOReturnValue>(
                         error::IOReturnValue::OpWouldBlock);
                 }
@@ -1004,14 +1087,14 @@ namespace cppnetlib {
         }
 
         IOResult
-        UDPSocketBase::receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) {
+            UDPSocketBase::receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) {
             assert(data != nullptr);
 
-            if (!isSocketOpen()) {
+            if(!isSocketOpen()) {
                 openSocket(address.ip().version());
             }
 
-            if (rwTimeout(OpTimeout::Read, mRecvFromTimeout)) {
+            if(rwTimeout(OpTimeout::Read, mRecvFromTimeout)) {
                 return error::makeError<std::size_t, error::IOReturnValue>(
                     error::IOReturnValue::OperationTimedOut);
             }
@@ -1020,15 +1103,15 @@ namespace cppnetlib {
             platform::SockLenT sockLen = helpers::toSockLen(IPVer::IPv6);
             const platform::NetLibRetvT retv =
                 ::recvfrom(mSocket,
-                           reinterpret_cast<platform::NativeTransmitDataT*>(data),
-                           static_cast<platform::IoDataSizeT>(std::min<std::size_t>(
-                               static_cast<std::size_t>(cMaxTransmitionUnitSize), maxSize)),
-                           0,
-                           &sockAddr,
-                           &sockLen);
+                reinterpret_cast<platform::NativeTransmitDataT*>(data),
+                static_cast<platform::IoDataSizeT>(std::min<std::size_t>(
+                static_cast<std::size_t>(cMaxTransmitionUnitSize), maxSize)),
+                0,
+                &sockAddr,
+                &sockLen);
 
-            if (retv == SOCKET_OP_UNSUCCESSFUL) {
-                if (platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
+            if(retv == SOCKET_OP_UNSUCCESSFUL) {
+                if(platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
                     return error::makeError<std::size_t, error::IOReturnValue>(
                         error::IOReturnValue::OpWouldBlock);
                 }
@@ -1044,17 +1127,17 @@ namespace cppnetlib {
         }
 
         void UDPSocketBase::setTimeout(const UDPTimeoutFor timeoutFor, const Timeout timeoutMs) {
-            switch (timeoutFor) {
-            case UDPTimeoutFor::SendTo:
-                mSendToTimeout = timeoutMs;
-                setWriteReadTimeout(OpTimeout::Write, timeoutMs);
-                break;
-            case UDPTimeoutFor::ReceiveFrom:
-                mRecvFromTimeout = timeoutMs;
-                setWriteReadTimeout(OpTimeout::Read, timeoutMs);
-                break;
-            default:
-                throw Exception("Unknwon UDPTimeoutFor value");
+            switch(timeoutFor) {
+                case UDPTimeoutFor::SendTo:
+                    mSendToTimeout = timeoutMs;
+                    setWriteReadTimeout(OpTimeout::Write, timeoutMs);
+                    break;
+                case UDPTimeoutFor::ReceiveFrom:
+                    mRecvFromTimeout = timeoutMs;
+                    setWriteReadTimeout(OpTimeout::Read, timeoutMs);
+                    break;
+                default:
+                    throw Exception("Unknwon UDPTimeoutFor value");
             }
         }
     } // namespace base
@@ -1066,13 +1149,13 @@ namespace cppnetlib {
             : TCPSocketBase() {}
 
         ClientBase<IPProto::TCP>::ClientBase(platform::SocketT&& socket)
-            : TCPSocketBase(std::move(socket)) {}
+            : TCPSocketBase(std::exchange(socket, INVALID_SOCKET_DESCRIPTOR)) {}
 
         ClientBase<IPProto::TCP>::ClientBase(ClientBase&& other)
-            : TCPSocketBase(std::move(dynamic_cast<TCPSocketBase&>(other))) {}
+            : TCPSocketBase(std::move(other)) {}
 
         ClientBase<IPProto::TCP>& ClientBase<IPProto::TCP>::operator=(ClientBase&& other) {
-            base::TCPSocketBase::operator=(std::move(dynamic_cast<base::TCPSocketBase&>(other)));
+            base::TCPSocketBase::operator=(std::move(other));
             return *this;
         }
 
@@ -1121,20 +1204,20 @@ namespace cppnetlib {
             : UDPSocketBase() {}
 
         Client<IPProto::UDP>::Client(Client&& other)
-            : UDPSocketBase(std::move(dynamic_cast<UDPSocketBase&>(other))) {}
+            : UDPSocketBase(std::move(other)) {}
 
         Client<IPProto::UDP>::~Client() {}
 
         void Client<IPProto::UDP>::bind(const Address& address) { SocketBase::bind(address); }
 
         IOResult Client<IPProto::UDP>::sendTo(const TransmitDataT* data,
-                                              const std::size_t size,
-                                              const Address& address) {
+            const std::size_t size,
+            const Address& address) {
             return UDPSocketBase::sendTo(data, size, address);
         }
 
         IOResult
-        Client<IPProto::UDP>::receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) {
+            Client<IPProto::UDP>::receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) {
             return UDPSocketBase::receiveFrom(data, maxSize, address);
         }
 
@@ -1160,29 +1243,29 @@ namespace cppnetlib {
             : TCPSocketBase() {}
 
         Server<IPProto::TCP>::Server(Server&& other)
-            : TCPSocketBase(std::move(dynamic_cast<TCPSocketBase&>(other))) {}
+            : TCPSocketBase(std::move(other)) {}
 
         Server<IPProto::TCP>::~Server() {}
 
-        void Server<IPProto::TCP>::bind(const Address& address) { SocketBase::bind(address); }
+        void Server<IPProto::TCP>::bind(const Address& address) {
+            SocketBase::bind(address);
+
+            nagle(nagle());
+        }
 
         void Server<IPProto::TCP>::listen(const std::size_t backlogSize) const {
             TCPSocketBase::listen(backlogSize);
         }
 
         void Server<IPProto::TCP>::tryAccept(const OnAcceptFnc& onAccept, void* userArg) const {
-            static std::function<void(platform::SocketT&&, Address&&, void*)> onAcceptInternal(
-                [&](platform::SocketT&& socket, Address&& address, void* userArg) {
+            TCPSocketBase::tryAccept(
+                [onAccept](platform::SocketT&& socket, Address&& address, void* userArg) {
                     onAccept(
-                        client::ClientBase<IPProto::TCP>(std::move(socket)), std::move(address), userArg);
-                    socket = INVALID_SOCKET_DESCRIPTOR;
-                });
-
-            TCPSocketBase::tryAccept(onAcceptInternal, userArg);
-        }
-
-        void Server<IPProto::TCP>::tryAccept(OnAcceptFnc&& onAccept, void* userArg) const {
-            tryAccept(onAccept, userArg);
+                        client::ClientBase<IPProto::TCP>(
+                            std::exchange(socket, INVALID_SOCKET_DESCRIPTOR))
+                            , std::move(address), userArg);
+                }
+                , userArg);
         }
 
         bool Server<IPProto::TCP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }
@@ -1199,7 +1282,7 @@ namespace cppnetlib {
             : Client() {}
 
         Server<IPProto::UDP>::Server(Server&& other)
-            : Client(std::move(dynamic_cast<Client&>(other))) {}
+            : Client(std::move(other)) {}
 
         Server<IPProto::UDP>::~Server() {}
 

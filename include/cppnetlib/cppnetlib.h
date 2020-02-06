@@ -140,14 +140,14 @@ namespace cppnetlib {
             bool hasError() const { return mHasError; }
 
             ValueT value() const {
-                if (hasError()) {
+                if(hasError()) {
                     throw Exception(FUNC_NAME + ": There is no value");
                 }
                 return mValue;
             }
 
             const ErrorT& error() const {
-                if (!hasError()) {
+                if(!hasError()) {
                     throw Exception(FUNC_NAME + ": There is no error");
                 }
                 return mError;
@@ -179,23 +179,23 @@ namespace cppnetlib {
     // Platform namespace
 
     namespace platform {
-#if defined PLATFORM_WINDOWS64
+        #if defined PLATFORM_WINDOWS64
 
         using SocketT = unsigned long long;
 
-#elif defined PLATFORM_WINDOWS32
+        #elif defined PLATFORM_WINDOWS32
 
         using SocketT = unsigned long;
 
-#elif defined PLATFORM_LINUX
+        #elif defined PLATFORM_LINUX
 
         using SocketT = int;
 
-#else
+        #else
 
-#error Unsupported platform!
+        #error Unsupported platform!
 
-#endif
+        #endif
     } // namespace platform
 
     // Address forward declaration
@@ -264,17 +264,31 @@ namespace cppnetlib {
 
             virtual ~TCPSocketBase();
 
+            void nagle(const bool enable);
+
+            bool nagle() const;
+
+        private:
+            void openSocket(const IPVer ipVer) override;
+
+            static void nagle_(const platform::SocketT socket, const bool enable);
+
+            static bool nagle_(const platform::SocketT socket);
+
+            Timeout mSendTimeout;
+            Timeout mRecvTimeout;
+            Timeout mConnectTimeout;
+            Timeout mAcceptTimeout;
+            bool mNagle;
+
+        protected:
             ConnectResult connect(const Address& address);
 
             void listen(const std::size_t backlogSize) const;
 
             void
-            tryAccept(const std::function<void(platform::SocketT&& sock, Address&& address, void* userArg)>&
-                          onAccept,
-                      void* userArg = nullptr) const;
-
-            void 
-            tryAccept(std::function<void(platform::SocketT&& sock, Address&& address, void* userArg)>&& onAccept,
+                tryAccept(const std::function<void(platform::SocketT&& sock, Address&& address, void* userArg)>&
+                onAccept,
                 void* userArg = nullptr) const;
 
             IOResult send(const TransmitDataT* data, const std::size_t size);
@@ -290,14 +304,6 @@ namespace cppnetlib {
             Timeout getConnectTimeout() const { return mConnectTimeout; }
 
             Timeout getAcceptTimeout() const { return mAcceptTimeout; }
-
-        private:
-            void openSocket(const IPVer ipVer) override;
-
-            Timeout mSendTimeout;
-            Timeout mRecvTimeout;
-            Timeout mConnectTimeout;
-            Timeout mAcceptTimeout;
         };
 
         class UDPSocketBase : public SocketBase {
@@ -338,7 +344,7 @@ namespace cppnetlib {
         class ClientBase;
 
         template <>
-        class ClientBase<IPProto::TCP> : protected base::TCPSocketBase {
+        class ClientBase<IPProto::TCP> : public base::TCPSocketBase {
         public:
             ClientBase(platform::SocketT&& socket);
 
@@ -436,7 +442,7 @@ namespace cppnetlib {
         class Server;
 
         template <>
-        class Server<IPProto::TCP> : private base::TCPSocketBase {
+        class Server<IPProto::TCP> : public base::TCPSocketBase {
         public:
             Server();
 
@@ -452,8 +458,6 @@ namespace cppnetlib {
             void listen(const std::size_t backlogSize) const;
 
             void tryAccept(const OnAcceptFnc& onAccept, void* userArg = nullptr) const;
-
-            void tryAccept(OnAcceptFnc && onAccept, void* userArg = nullptr) const;
 
             bool isSocketOpen() const;
 
