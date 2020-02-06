@@ -670,7 +670,7 @@ namespace cppnetlib {
             platform::nativeSocketClose(mSocket);
         }
 
-        void SocketBase::bind(const Address& address, const bool allowReuse = false) {
+        void SocketBase::bind(const Address& address, const bool allowReuse) {
             if(!isSocketOpen()) {
                 openSocket(address.ip().version());
             }
@@ -1209,7 +1209,7 @@ namespace cppnetlib {
 
         Client<IPProto::UDP>::~Client() {}
 
-        void Client<IPProto::UDP>::bind(const Address& address, const bool allowReuse = false) { SocketBase::bind(address, allowReuse); }
+        void Client<IPProto::UDP>::bind(const Address& address, const bool allowReuse) { SocketBase::bind(address, allowReuse); }
 
         IOResult Client<IPProto::UDP>::sendTo(const TransmitDataT* data,
             const std::size_t size,
@@ -1244,7 +1244,7 @@ namespace cppnetlib {
 
         Server<IPProto::TCP>::~Server() {}
 
-        void Server<IPProto::TCP>::bind(const Address& address, const bool allowReuse = false) {
+        void Server<IPProto::TCP>::bind(const Address& address, const bool allowReuse) {
             SocketBase::bind(address, allowReuse);
 
             nagle(nagle());
