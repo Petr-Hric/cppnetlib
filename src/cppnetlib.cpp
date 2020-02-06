@@ -247,6 +247,15 @@ namespace cppnetlib {
             }
         }
 
+        void nativeSetSockOpt(const platform::SocketT socket, const int level, const int optName, const void* opt, const int optLen) {
+            assert(opt != nullptr);
+            assert(optLen > 0);
+            if(setsockopt(socket, level, optName, reinterpret_cast<const char*>(opt), optLen) != 0) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                    "Could not perform getsockopt");
+            }
+        }
+
         void nativeGetSockOpt(const platform::SocketT socket, const int level, const int optName, void* opt, int* optLen) {
             assert(opt != nullptr);
             assert(optLen != nullptr);
@@ -350,6 +359,18 @@ namespace cppnetlib {
             if(inet_ntop(addressFamily, src, dst, dstMaxSize) == nullptr) {
                 throw exception::ExceptionWithSystemErrorMessage(
                     FUNC_NAME, "Could not convert network address to human readable format");
+            }
+        }
+
+        void nativeSetSockOpt(const platform::SocketT socket, const int level, const int optName, const void* opt, const int optLen) {
+            assert(opt != nullptr);
+            assert(optLen > 0);
+
+            static_assert(sizeof(int) == sizeof(socklen_t), "Incompatible type size");
+
+            if(setsockopt(socket, level, optName, opt, static_cast<socklen_t>(optLen)) != 0) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                    "Could not perform setsockopt");
             }
         }
 
@@ -747,43 +768,45 @@ namespace cppnetlib {
             }
 
             #if defined PLATFORM_WINDOWS
+            const Millis::rep tmp = TimeCast<Millis>(timeout).count();
+
+            assert(tmp <= std::numeric_limits<int>::max());
+
+            const int millis = static_cast<int>(tmp);
+
             switch(opTimeoutFor) {
                 case OpTimeout::Write:
-                    if(setsockopt(mSocket,
+                    platform::nativeSetSockOpt(mSocket,
                         SOL_SOCKET,
                         SO_SNDTIMEO,
-                        reinterpret_cast<const char*>(&timeout),
-                        sizeof(timeout)) != 0) {
-                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                            "Could not set write operation timeout");
-                    }
+                        &millis,
+                        sizeof(millis));
+
                     break;
                 case OpTimeout::Read:
-                    if(setsockopt(mSocket,
+                    platform::nativeSetSockOpt(mSocket,
                         SOL_SOCKET,
                         SO_RCVTIMEO,
-                        reinterpret_cast<const char*>(&timeout),
-                        sizeof(timeout)) != 0) {
-                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                            "Could not set read operation timeout");
-                    }
+                        &timeout,
+                        sizeof(timeout));
                     break;
                 default:
                     throw Exception("Unknown OpTimeout value");
             }
             #elif defined PLATFORM_LINUX
+            const int micros = TimeCast<Micros>(timeout).count();
+
+            const timeval tv = {
+                micros / 1000000
+                , micros % 1000000
+            };
+
             switch(opTimeoutFor) {
                 case OpTimeout::Write:
-                    if(setsockopt(mSocket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) != 0) {
-                        exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                            "Could not set write operation timeout");
-                    }
+                    platform::nativeSetSockOpt(mSocket, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
                     break;
                 case OpTimeout::Read:
-                    if(setsockopt(mSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
-                        exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                            "Could not set read operation timeout");
-                    }
+                    platform::nativeSetSockOpt(mSocket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
                     break;
                 default:
                     throw Exception("Unknown OpTimeout value");
@@ -842,29 +865,23 @@ namespace cppnetlib {
 
         void TCPSocketBase::nagle_(const platform::SocketT socket, const bool enable) {
             const int flag = enable ? 1 : 0;
-            if(setsockopt(socket
+            platform::nativeSetSockOpt(socket
                 , IPPROTO_TCP
                 , TCP_NODELAY
-                , reinterpret_cast<const char*>(&flag)
-                , sizeof(flag)) != 0) {
-                throw exception::ExceptionWithSystemErrorMessage(
-                    FUNC_NAME,
-                    std::string("Could not ") + (enable ? "enable" : "disable") + " Nagle's algorithm");
-            }
+                , &flag
+                , sizeof(flag));
         }
 
         bool TCPSocketBase::nagle_(const platform::SocketT socket) {
             int flag = 0;
             int optlen = sizeof(flag);
-            if(getsockopt(socket
+
+            platform::nativeGetSockOpt(socket
                 , IPPROTO_TCP
                 , TCP_NODELAY
-                , reinterpret_cast<char*>(&flag)
-                , &optlen) != 0) {
-                throw exception::ExceptionWithSystemErrorMessage(
-                    FUNC_NAME,
-                    "Could not get Nagle's algorithm state");
-            }
+                , &flag
+                , &optlen);
+
             return flag ? false : true;
         }
 
