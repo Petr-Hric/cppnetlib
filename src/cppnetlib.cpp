@@ -670,9 +670,15 @@ namespace cppnetlib {
             platform::nativeSocketClose(mSocket);
         }
 
-        void SocketBase::bind(const Address& address) {
+        void SocketBase::bind(const Address& address, const bool allowReuse = false) {
             if(!isSocketOpen()) {
                 openSocket(address.ip().version());
+            }
+
+            if(allowReuse) {
+                const int opt = 1;
+                const int optLen = sizeof(opt);
+                platform::nativeSetSockOpt(mSocket, SOL_SOCKET, SO_REUSEADDR, &opt, optLen);
             }
 
             const sockaddr sockAddr = createSockAddr(address);
@@ -976,6 +982,8 @@ namespace cppnetlib {
                         return error::makeError<std::size_t, error::IOReturnValue>(
                             error::IOReturnValue::OpWouldBlock);
                     case CPPNL_FORCEDISCONNECT:
+                        close();
+
                         return error::makeError<std::size_t, error::IOReturnValue>(
                             error::IOReturnValue::ForciblyDisconnected);
                     default:
@@ -1014,6 +1022,8 @@ namespace cppnetlib {
                             error::IOReturnValue::OpWouldBlock);
                     case CPPNL_FORCEDISCONNECT:
                     case CPPNL_CONNECTIONABORT:
+                        close();
+
                         return error::makeError<std::size_t, error::IOReturnValue>(
                             error::IOReturnValue::ForciblyDisconnected);
                     default:
@@ -1199,7 +1209,7 @@ namespace cppnetlib {
 
         Client<IPProto::UDP>::~Client() {}
 
-        void Client<IPProto::UDP>::bind(const Address& address) { SocketBase::bind(address); }
+        void Client<IPProto::UDP>::bind(const Address& address, const bool allowReuse = false) { SocketBase::bind(address, allowReuse); }
 
         IOResult Client<IPProto::UDP>::sendTo(const TransmitDataT* data,
             const std::size_t size,
@@ -1234,8 +1244,8 @@ namespace cppnetlib {
 
         Server<IPProto::TCP>::~Server() {}
 
-        void Server<IPProto::TCP>::bind(const Address& address) {
-            SocketBase::bind(address);
+        void Server<IPProto::TCP>::bind(const Address& address, const bool allowReuse = false) {
+            SocketBase::bind(address, allowReuse);
 
             nagle(nagle());
         }

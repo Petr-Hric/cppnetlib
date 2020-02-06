@@ -239,7 +239,7 @@ namespace cppnetlib {
 
             void close();
 
-            void bind(const Address& address);
+            void bind(const Address& address, const bool allowReuse);
 
             bool blocked() const;
 
@@ -467,7 +467,7 @@ namespace cppnetlib {
 
             virtual ~Client();
 
-            void bind(const Address& address);
+            void bind(const Address& address, const bool allowReuse = false);
 
             IOResult sendTo(const TransmitDataT* data, const std::size_t size, const Address& address);
 
@@ -510,7 +510,7 @@ namespace cppnetlib {
 
             virtual ~Server();
 
-            void bind(const Address& address);
+            void bind(const Address& address, const bool allowReuse = false);
 
             void listen(const std::size_t backlogSize) const;
 
