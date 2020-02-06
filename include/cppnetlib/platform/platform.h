@@ -76,6 +76,7 @@ namespace cppnetlib {
 #elif defined PLATFORM_LINUX
 
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
