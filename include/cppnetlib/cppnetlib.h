@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <chrono>
 
 #define FUNC_NAME std::string(__func__)
 #define MAX_TRANSMISSION_UNIT 1200
@@ -24,7 +25,20 @@ namespace cppnetlib {
     using PortT = uint16_t;
     using TransmittedDataSizeT = std::size_t;
     using TransmitDataT = uint8_t;
-    using Timeout = uint32_t;
+
+    using Seconds = std::chrono::seconds;
+    using Millis = std::chrono::milliseconds;
+    using Micros = std::chrono::microseconds;
+    using Nanos = std::chrono::nanoseconds;
+
+    using BaseTimeUnit = Micros;
+
+    template<class To, class Rep, class Period>
+    To TimeCast(const std::chrono::duration<Rep, Period>& duration) {
+        return std::chrono::duration_cast<To, Rep, Period>(duration);
+    }
+
+
 
     // Ip
 
@@ -231,15 +245,15 @@ namespace cppnetlib {
 
             bool isSocketOpen() const;
 
-            bool rwTimeout(const OpTimeout opTimeoutFor, const Timeout timeout) const;
-
         private:
             bool mBlocking;
 
         protected:
             void setBlocked(const bool blocked);
 
-            void setWriteReadTimeout(const OpTimeout opTimeoutFor, const Timeout timeout);
+            bool rwTimeout(const OpTimeout opTimeoutFor, const BaseTimeUnit& timeout) const;
+
+            void setWriteReadTimeout(const OpTimeout opTimeoutFor, const BaseTimeUnit& timeout);
 
             platform::SocketT mSocket;
 
@@ -275,10 +289,10 @@ namespace cppnetlib {
 
             static bool nagle_(const platform::SocketT socket);
 
-            Timeout mSendTimeout;
-            Timeout mRecvTimeout;
-            Timeout mConnectTimeout;
-            Timeout mAcceptTimeout;
+            BaseTimeUnit mSendTimeout;
+            BaseTimeUnit mRecvTimeout;
+            BaseTimeUnit mConnectTimeout;
+            BaseTimeUnit mAcceptTimeout;
             bool mNagle;
 
         protected:
@@ -295,15 +309,35 @@ namespace cppnetlib {
 
             IOResult receive(TransmitDataT* data, const std::size_t maxSize);
 
-            void setTimeout(const TCPTimeoutFor timeoutFor, const Timeout timeoutMs);
+            template<typename T = Millis>
+            void setTimeout(const TCPTimeoutFor timeoutFor, const T& timeout) {
+                switch(timeoutFor) {
+                    case TCPTimeoutFor::Send:
+                        mSendTimeout = TimeCast<BaseTimeUnit>(timeout);
+                        // setWriteReadTimeout(OpTimeout::Write, TimeCast<BaseTimeUnit>(timeout));
+                        break;
+                    case TCPTimeoutFor::Recieve:
+                        mRecvTimeout = TimeCast<BaseTimeUnit>(timeout);
+                        // setWriteReadTimeout(OpTimeout::Read, TimeCast<BaseTimeUnit>(timeout));
+                        break;
+                    case TCPTimeoutFor::Connect:
+                        mConnectTimeout = TimeCast<BaseTimeUnit>(timeout);
+                        break;
+                    case TCPTimeoutFor::Accept:
+                        mAcceptTimeout = TimeCast<BaseTimeUnit>(timeout);
+                        break;
+                    default:
+                        throw Exception("Unknwon TCPTimeoutFor value");
+                }
+            }
 
-            Timeout getSendTimeout() const { return mSendTimeout; }
+            const BaseTimeUnit& getSendTimeout() const { return mSendTimeout; }
 
-            Timeout getReceiveTimeout() const { return mRecvTimeout; }
+            const BaseTimeUnit& getReceiveTimeout() const { return mRecvTimeout; }
 
-            Timeout getConnectTimeout() const { return mConnectTimeout; }
+            const BaseTimeUnit& getConnectTimeout() const { return mConnectTimeout; }
 
-            Timeout getAcceptTimeout() const { return mAcceptTimeout; }
+            const BaseTimeUnit& getAcceptTimeout() const { return mAcceptTimeout; }
         };
 
         class UDPSocketBase : public SocketBase {
@@ -321,17 +355,31 @@ namespace cppnetlib {
 
             IOResult receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address);
 
-            void setTimeout(const UDPTimeoutFor timeoutFor, const Timeout timeoutMs);
+            template<typename T = Millis>
+            void setTimeout(const UDPTimeoutFor timeoutFor, const T& timeout) {
+                switch(timeoutFor) {
+                    case UDPTimeoutFor::SendTo:
+                        mSendToTimeout = TimeCast<BaseTimeUnit>(timeout);
+                        setWriteReadTimeout(OpTimeout::Write, mSendToTimeout);
+                        break;
+                    case UDPTimeoutFor::ReceiveFrom:
+                        mRecvFromTimeout = TimeCast<BaseTimeUnit>(timeout);
+                        setWriteReadTimeout(OpTimeout::Read, mRecvFromTimeout);
+                        break;
+                    default:
+                        throw Exception("Unknwon UDPTimeoutFor value");
+                }
+            }
 
-            Timeout getSendToTimeout() const { return mSendToTimeout; }
+            const BaseTimeUnit& getSendToTimeout() const { return mSendToTimeout; }
 
-            Timeout getReceiveFromTimeout() const { return mRecvFromTimeout; }
+            const BaseTimeUnit& getReceiveFromTimeout() const { return mRecvFromTimeout; }
 
         private:
             void openSocket(const IPVer ipVer) override;
 
-            Timeout mSendToTimeout;
-            Timeout mRecvFromTimeout;
+            BaseTimeUnit mSendToTimeout;
+            BaseTimeUnit mRecvFromTimeout;
         };
     } // namespace base
 
@@ -365,11 +413,14 @@ namespace cppnetlib {
 
             void close();
 
-            void setTimeout(const TCPTimeoutFor timeoutFor, const Timeout timeoutMs);
+            template<typename T = Millis>
+            void setTimeout(const TCPTimeoutFor timeoutFor, const T& timeout) {
+                TCPSocketBase::setTimeout(timeoutFor, timeout);
+            }
 
-            Timeout getSendTimeout() const;
+            const BaseTimeUnit& getSendTimeout() const;
 
-            Timeout getReceiveTimeout() const;
+            const BaseTimeUnit& getReceiveTimeout() const;
 
         protected:
             ClientBase();
@@ -396,9 +447,12 @@ namespace cppnetlib {
 
             bool isSocketOpen() const;
 
-            void setConnectTimeout(const Timeout timeoutMs);
+            template<typename T = Millis>
+            void setConnectTimeout(const T& timeout) {
+                ClientBase::setTimeout(TCPTimeoutFor::Connect, timeout);
+            }
 
-            Timeout getConnectTimeout() const;
+            const BaseTimeUnit& getConnectTimeout() const;
         };
 
         template <>
@@ -423,11 +477,14 @@ namespace cppnetlib {
 
             void close();
 
-            void setTimeout(const UDPTimeoutFor timeoutFor, const Timeout timeoutMs);
+            template<typename T = Millis>
+            void setTimeout(const UDPTimeoutFor timeoutFor, const T& timeout) {
+                UDPSocketBase::setTimeout(timeoutFor, timeout);
+            }
 
-            Timeout getSendToTimeout() const;
+            const BaseTimeUnit& getSendToTimeout() const;
 
-            Timeout getReceiveTimeout() const;
+            const BaseTimeUnit& getReceiveTimeout() const;
         };
     } // namespace client
 
@@ -463,9 +520,12 @@ namespace cppnetlib {
 
             void close();
 
-            void setAcceptTimeout(const Timeout timeoutMs);
+            const BaseTimeUnit& getAcceptTimeout() const;
 
-            Timeout getAcceptTimeout() const;
+            template<typename T = Millis>
+            void setAcceptTimeout(const T& timeoutMs) {
+                TCPSocketBase::setTimeout<T>(TCPTimeoutFor::Accept, timeoutMs);
+            }
         };
 
         template <>

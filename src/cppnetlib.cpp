@@ -678,7 +678,7 @@ namespace cppnetlib {
 
         bool SocketBase::isSocketOpen() const { return mSocket != INVALID_SOCKET_DESCRIPTOR; }
 
-        bool SocketBase::rwTimeout(const OpTimeout selectTimeoutFor, const Timeout timeout) const {
+        bool SocketBase::rwTimeout(const OpTimeout selectTimeoutFor, const BaseTimeUnit& timeout) const {
             if(!isSocketOpen()) {
                 throw Exception(FUNC_NAME +
                     ": Could not perform connect/accept timeout, because the socket is not open");
@@ -706,9 +706,15 @@ namespace cppnetlib {
             FD_ZERO(&fdErrorSet);
             FD_SET(mSocket, &fdErrorSet);
 
+            const BaseTimeUnit::rep sec = timeout.count() / static_cast<BaseTimeUnit::rep>(1000000);
+            const BaseTimeUnit::rep uSec = timeout.count() % static_cast<BaseTimeUnit::rep>(1000000);
+
+            assert(sec <= std::numeric_limits<long>::max());
+            assert(uSec <= std::numeric_limits<long>::max());
+
             timeval tv;
-            tv.tv_sec = timeout / 1000;
-            tv.tv_usec = timeout % 1000 * 1000;
+            tv.tv_sec = static_cast<long>(sec);
+            tv.tv_usec = static_cast<long>(uSec);
 
             const int selectRetv = select(static_cast<int>(mSocket + 1), fdReadPtr, fdWritePtr, &fdErrorSet, &tv);
             if(selectRetv == 0) {
@@ -734,7 +740,7 @@ namespace cppnetlib {
             return false;
         }
 
-        void SocketBase::setWriteReadTimeout(const OpTimeout opTimeoutFor, const Timeout timeout) {
+        void SocketBase::setWriteReadTimeout(const OpTimeout opTimeoutFor, const BaseTimeUnit& timeout) {
             if(!isSocketOpen()) {
                 throw Exception(FUNC_NAME +
                     ": Could not set write/read timeout, because the socket is not open");
@@ -789,10 +795,10 @@ namespace cppnetlib {
 
         TCPSocketBase::TCPSocketBase()
             : SocketBase()
-            , mSendTimeout(DEFAULT_TCP_SEND_TIMEOUT)
-            , mRecvTimeout(DEFAULT_TCP_RECV_TIMEOUT)
-            , mConnectTimeout(DEFAULT_TCP_CONNECT_TIMEOUT)
-            , mAcceptTimeout(DEFAULT_TCP_ACCEPT_TIMEOUT)
+            , mSendTimeout(TimeCast<BaseTimeUnit>(Millis(DEFAULT_TCP_SEND_TIMEOUT)))
+            , mRecvTimeout(TimeCast<BaseTimeUnit>(Millis(DEFAULT_TCP_RECV_TIMEOUT)))
+            , mConnectTimeout(TimeCast<BaseTimeUnit>(Millis(DEFAULT_TCP_CONNECT_TIMEOUT)))
+            , mAcceptTimeout(TimeCast<BaseTimeUnit>(Millis(DEFAULT_TCP_ACCEPT_TIMEOUT)))
             , mNagle(true) {}
 
         TCPSocketBase::TCPSocketBase(TCPSocketBase&& other)
@@ -805,10 +811,10 @@ namespace cppnetlib {
 
         TCPSocketBase::TCPSocketBase(platform::SocketT&& socket)
             : SocketBase(std::exchange(socket, INVALID_SOCKET_DESCRIPTOR))
-            , mSendTimeout(DEFAULT_TCP_SEND_TIMEOUT)
-            , mRecvTimeout(DEFAULT_TCP_RECV_TIMEOUT)
-            , mConnectTimeout(DEFAULT_TCP_CONNECT_TIMEOUT)
-            , mAcceptTimeout(DEFAULT_TCP_ACCEPT_TIMEOUT)
+            , mSendTimeout(TimeCast<BaseTimeUnit>(Millis(DEFAULT_TCP_SEND_TIMEOUT)))
+            , mRecvTimeout(TimeCast<BaseTimeUnit>(Millis(DEFAULT_TCP_RECV_TIMEOUT)))
+            , mConnectTimeout(TimeCast<BaseTimeUnit>(Millis(DEFAULT_TCP_CONNECT_TIMEOUT)))
+            , mAcceptTimeout(TimeCast<BaseTimeUnit>(Millis(DEFAULT_TCP_ACCEPT_TIMEOUT)))
             , mNagle(nagle_(mSocket)) {}
 
         TCPSocketBase& TCPSocketBase::operator=(TCPSocketBase&& other) {
@@ -872,7 +878,7 @@ namespace cppnetlib {
                 case error::IOReturnValue::Successful:
                     return true;
                 case error::IOReturnValue::OpWouldBlock:
-                    if(getConnectTimeout() > 0 && rwTimeout(OpTimeout::Write, getConnectTimeout())) {
+                    if(getConnectTimeout().count() > 0 && rwTimeout(OpTimeout::Write, getConnectTimeout())) {
                         return error::makeError<bool, error::ConnectReturnValue>(
                             error::ConnectReturnValue::OperationTimedOut);
                     } else {
@@ -1008,27 +1014,6 @@ namespace cppnetlib {
             return mNagle;
         }
 
-        void TCPSocketBase::setTimeout(const TCPTimeoutFor timeoutFor, const Timeout timeoutMs) {
-            switch(timeoutFor) {
-                case TCPTimeoutFor::Send:
-                    mSendTimeout = timeoutMs;
-                    // setWriteReadTimeout(OpTimeout::Write, timeoutMs);
-                    break;
-                case TCPTimeoutFor::Recieve:
-                    mRecvTimeout = timeoutMs;
-                    // setWriteReadTimeout(OpTimeout::Read, timeoutMs);
-                    break;
-                case TCPTimeoutFor::Connect:
-                    mConnectTimeout = timeoutMs;
-                    break;
-                case TCPTimeoutFor::Accept:
-                    mAcceptTimeout = timeoutMs;
-                    break;
-                default:
-                    throw Exception("Unknwon TCPTimeoutFor value");
-            }
-        }
-
         UDPSocketBase::UDPSocketBase()
             : SocketBase()
             , mSendToTimeout(DEFAULT_UDP_SENDTO_TIMEOUT)
@@ -1125,21 +1110,6 @@ namespace cppnetlib {
 
             return static_cast<std::size_t>(retv);
         }
-
-        void UDPSocketBase::setTimeout(const UDPTimeoutFor timeoutFor, const Timeout timeoutMs) {
-            switch(timeoutFor) {
-                case UDPTimeoutFor::SendTo:
-                    mSendToTimeout = timeoutMs;
-                    setWriteReadTimeout(OpTimeout::Write, timeoutMs);
-                    break;
-                case UDPTimeoutFor::ReceiveFrom:
-                    mRecvFromTimeout = timeoutMs;
-                    setWriteReadTimeout(OpTimeout::Read, timeoutMs);
-                    break;
-                default:
-                    throw Exception("Unknwon UDPTimeoutFor value");
-            }
-        }
     } // namespace base
 
     // Client namespace
@@ -1173,13 +1143,9 @@ namespace cppnetlib {
 
         bool ClientBase<IPProto::TCP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }
 
-        void ClientBase<IPProto::TCP>::setTimeout(const TCPTimeoutFor timeoutFor, const Timeout timeoutMs) {
-            TCPSocketBase::setTimeout(timeoutFor, timeoutMs);
-        }
+        const BaseTimeUnit& ClientBase<IPProto::TCP>::getSendTimeout() const { return TCPSocketBase::getSendTimeout(); }
 
-        Timeout ClientBase<IPProto::TCP>::getSendTimeout() const { return TCPSocketBase::getSendTimeout(); }
-
-        Timeout ClientBase<IPProto::TCP>::getReceiveTimeout() const {
+        const BaseTimeUnit& ClientBase<IPProto::TCP>::getReceiveTimeout() const {
             return TCPSocketBase::getReceiveTimeout();
         }
 
@@ -1194,11 +1160,7 @@ namespace cppnetlib {
 
         bool Client<IPProto::TCP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }
 
-        void Client<IPProto::TCP>::setConnectTimeout(const Timeout timeoutMs) {
-            ClientBase::setTimeout(TCPTimeoutFor::Connect, timeoutMs);
-        }
-
-        Timeout Client<IPProto::TCP>::getConnectTimeout() const { return ClientBase::getConnectTimeout(); }
+        const BaseTimeUnit& Client<IPProto::TCP>::getConnectTimeout() const { return ClientBase::getConnectTimeout(); }
 
         Client<IPProto::UDP>::Client()
             : UDPSocketBase() {}
@@ -1225,13 +1187,9 @@ namespace cppnetlib {
 
         void Client<IPProto::UDP>::close() { SocketBase::close(); }
 
-        void Client<IPProto::UDP>::setTimeout(const UDPTimeoutFor timeoutFor, const Timeout timeoutMs) {
-            UDPSocketBase::setTimeout(timeoutFor, timeoutMs);
-        }
+        const BaseTimeUnit& Client<IPProto::UDP>::getSendToTimeout() const { return UDPSocketBase::getSendToTimeout(); }
 
-        Timeout Client<IPProto::UDP>::getSendToTimeout() const { return UDPSocketBase::getSendToTimeout(); }
-
-        Timeout Client<IPProto::UDP>::getReceiveTimeout() const {
+        const BaseTimeUnit& Client<IPProto::UDP>::getReceiveTimeout() const {
             return UDPSocketBase::getReceiveFromTimeout();
         }
     } // namespace client
@@ -1260,23 +1218,19 @@ namespace cppnetlib {
         void Server<IPProto::TCP>::tryAccept(const OnAcceptFnc& onAccept, void* userArg) const {
             TCPSocketBase::tryAccept(
                 [onAccept](platform::SocketT&& socket, Address&& address, void* userArg) {
-                    onAccept(
-                        client::ClientBase<IPProto::TCP>(
-                            std::exchange(socket, INVALID_SOCKET_DESCRIPTOR))
-                            , std::move(address), userArg);
-                }
-                , userArg);
+                onAccept(
+                    client::ClientBase<IPProto::TCP>(
+                    std::exchange(socket, INVALID_SOCKET_DESCRIPTOR))
+                    , std::move(address), userArg);
+            }
+            , userArg);
         }
 
         bool Server<IPProto::TCP>::isSocketOpen() const { return SocketBase::isSocketOpen(); }
 
         void Server<IPProto::TCP>::close() { SocketBase::close(); }
 
-        void Server<IPProto::TCP>::setAcceptTimeout(const Timeout timeoutMs) {
-            TCPSocketBase::setTimeout(TCPTimeoutFor::Accept, timeoutMs);
-        }
-
-        Timeout Server<IPProto::TCP>::getAcceptTimeout() const { return TCPSocketBase::getAcceptTimeout(); }
+        const BaseTimeUnit& Server<IPProto::TCP>::getAcceptTimeout() const { return TCPSocketBase::getAcceptTimeout(); }
 
         Server<IPProto::UDP>::Server()
             : Client() {}
