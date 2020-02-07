@@ -849,6 +849,77 @@ namespace cppnetlib {
             #endif
         }
 
+        IResult SocketBase::processIResult() {
+            const error::NativeErrorCodeT errorCode = platform::nativeErrorCode();
+            switch(errorCode) {
+                case CPPNL_OPWOULDBLOCK:
+                    return error::makeError<std::size_t, error::IResult>(
+                        error::IResult::OpWouldBlock);
+                case CPPNL_CONNECTION_REFUSED:
+                    close();
+
+                    return error::makeError<std::size_t, error::IResult>(
+                        error::IResult::ConnectionRefused);
+                case CPPNL_INVALID_ARGUMENT:
+                    return error::makeError<std::size_t, error::IResult>(
+                        error::IResult::InvalidArgument);
+                case CPPNL_NO_MEMORY:
+                    return error::makeError<std::size_t, error::IResult>(
+                        error::IResult::NoMemoryAvailable);
+                case CPPNL_NOT_CONNECTED:
+                    return error::makeError<std::size_t, error::IResult>(
+                        error::IResult::NotConnected);
+                case CPPNL_INVALID_SOCKET:
+                    return error::makeError<std::size_t, error::IResult>(
+                        error::IResult::InvalidArgument);
+                case CPPNL_CONNECTION_ABORT:
+                    return error::makeError<std::size_t, error::IResult>(
+                        error::IResult::ConnectionAbort);
+                default:
+                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
+            }
+        }
+
+        OResult SocketBase::processOResult() {
+            const error::NativeErrorCodeT errorCode = platform::nativeErrorCode();
+            switch(errorCode) {
+                case CPPNL_NOACCESS:
+                    return error::makeError<std::size_t, error::OResult>(
+                        error::OResult::NoAccess);
+                case CPPNL_OPWOULDBLOCK:
+                    return error::makeError<std::size_t, error::OResult>(
+                        error::OResult::OpWouldBlock);
+                case CPPNL_CONNECTION_RESET:
+                    close();
+
+                    return error::makeError<std::size_t, error::OResult>(
+                        error::OResult::ConnectionReset);
+                case CPPNL_DEST_ADDR_REQUIRED:
+                    return error::makeError<std::size_t, error::OResult>(
+                        error::OResult::NoDestinationAddressProvidedInNonConnectionMode);
+                case CPPNL_INVALID_ARGUMENT:
+                    return error::makeError<std::size_t, error::OResult>(
+                        error::OResult::InvalidArgument);
+                case CPPNL_DEST_ADDR_PROVIDED:
+                    return error::makeError<std::size_t, error::OResult>(
+                        error::OResult::DestinationAddressProvidedInConnectionMode);
+                case CPPNL_NO_MEMORY:
+                    return error::makeError<std::size_t, error::OResult>(
+                        error::OResult::NoMemoryAvailable);
+                case CPPNL_NOT_CONNECTED:
+                    return error::makeError<std::size_t, error::OResult>(
+                        error::OResult::NotConnected);
+                case CPPNL_INVALID_SOCKET:
+                    return error::makeError<std::size_t, error::OResult>(
+                        error::OResult::InvalidArgument);
+                case CPPNL_CONNECTION_ABORT:
+                    return error::makeError<std::size_t, error::OResult>(
+                        error::OResult::ConnectionAbort);
+                default:
+                    throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
+            }
+        }
+
         TCPSocketBase::TCPSocketBase()
             : SocketBase()
             , mSendTimeout(TimeCast<BaseTimeUnit>(Millis(DEFAULT_TCP_SEND_TIMEOUT)))
@@ -1000,19 +1071,7 @@ namespace cppnetlib {
                 std::min<std::size_t>(static_cast<std::size_t>(cMaxTransmitionUnitSize), size)),
                 0);
             if(retv == SOCKET_OP_UNSUCCESSFUL) {
-                const error::NativeErrorCodeT errorCode = platform::nativeErrorCode();
-                switch(errorCode) {
-                    case CPPNL_OPWOULDBLOCK:
-                        return error::makeError<std::size_t, error::OResult>(
-                            error::OResult::OpWouldBlock);
-                    case CPPNL_CONNECTION_RESET:
-                        close();
-
-                        return error::makeError<std::size_t, error::OResult>(
-                            error::OResult::ConnectionReset);
-                    default:
-                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
-                }
+                return processOResult();
             }
 
             assert(retv >= 0);
@@ -1039,19 +1098,7 @@ namespace cppnetlib {
                 0);
 
             if(retv == SOCKET_OP_UNSUCCESSFUL) {
-                const error::NativeErrorCodeT errorCode = platform::nativeErrorCode();
-                switch(errorCode) {
-                    case CPPNL_OPWOULDBLOCK:
-                        return error::makeError<std::size_t, error::IResult>(
-                            error::IResult::OpWouldBlock);
-                    case CPPNL_CONNECTION_ABORT:
-                        close();
-
-                        return error::makeError<std::size_t, error::IResult>(
-                            error::IResult::ConnectionAbort);
-                    default:
-                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not recv data");
-                }
+                return processIResult();
             } else if(retv == 0) {
                 return error::makeError<std::size_t, error::IResult>(
                     error::IResult::Disconnected);
@@ -1121,11 +1168,7 @@ namespace cppnetlib {
                 helpers::toSockLen(address));
 
             if(retv == SOCKET_OP_UNSUCCESSFUL) {
-                if(platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
-                    return error::makeError<std::size_t, error::OResult>(
-                        error::OResult::OpWouldBlock);
-                }
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
+                return processOResult();
             }
 
             assert(retv > 0);
@@ -1158,11 +1201,7 @@ namespace cppnetlib {
                 &sockLen);
 
             if(retv == SOCKET_OP_UNSUCCESSFUL) {
-                if(platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
-                    return error::makeError<std::size_t, error::IResult>(
-                        error::IResult::OpWouldBlock);
-                }
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not receive data");
+                return processIResult();
             }
 
             address = createAddress(sockAddr);

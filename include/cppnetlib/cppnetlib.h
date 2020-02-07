@@ -144,17 +144,20 @@ namespace cppnetlib {
             , NotConnected
             , SocketPassedIsNotValid
             , ConnectionAbort
+            , InvalidSocket
             , Successful
         };
 
         enum class IResult {
             OpWouldBlock
             , ConnectionRefused
+            , InvalidArgument
             , NoMemoryAvailable
             , NotConnected
             , SocketPassedIsNotValid
             , ConnectionAbort
             , Disconnected
+            , InvalidSocket
             , Successful
         };
 
@@ -283,6 +286,10 @@ namespace cppnetlib {
             bool rwTimeout(const OpTimeout opTimeoutFor, const BaseTimeUnit& timeout) const;
 
             void setWriteReadTimeout(const OpTimeout opTimeoutFor, const BaseTimeUnit& timeout);
+
+            IResult processIResult();
+
+            OResult processOResult();
 
             platform::SocketT mSocket;
 
