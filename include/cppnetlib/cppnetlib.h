@@ -150,6 +150,7 @@ namespace cppnetlib {
 
         enum class IResult {
             OpWouldBlock
+            , ConnectionReset
             , ConnectionRefused
             , InvalidArgument
             , NoMemoryAvailable

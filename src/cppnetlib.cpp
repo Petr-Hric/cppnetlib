@@ -851,6 +851,11 @@ namespace cppnetlib {
                 case CPPNL_OPWOULDBLOCK:
                     return error::makeError<std::size_t, error::IResult>(
                         error::IResult::OpWouldBlock);
+                case CPPNL_CONNECTION_RESET:
+                    close();
+
+                    return error::makeError<std::size_t, error::IResult>(
+                        error::IResult::ConnectionReset);
                 case CPPNL_CONNECTION_REFUSED:
                     close();
 
@@ -869,6 +874,8 @@ namespace cppnetlib {
                     return error::makeError<std::size_t, error::IResult>(
                         error::IResult::InvalidArgument);
                 case CPPNL_CONNECTION_ABORT:
+                    close();
+
                     return error::makeError<std::size_t, error::IResult>(
                         error::IResult::ConnectionAbort);
                 default:
@@ -909,6 +916,8 @@ namespace cppnetlib {
                     return error::makeError<std::size_t, error::OResult>(
                         error::OResult::InvalidArgument);
                 case CPPNL_CONNECTION_ABORT:
+                    close();
+
                     return error::makeError<std::size_t, error::OResult>(
                         error::OResult::ConnectionAbort);
                 default:
