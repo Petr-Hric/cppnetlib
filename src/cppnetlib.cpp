@@ -328,9 +328,6 @@ namespace cppnetlib {
         // Common
 
         SocketT nativeSocketOpen(const NativeFamilyT addressFamily, const int ipProtocol) {
-            static std::mutex mtx;
-            std::lock_guard<std::mutex> lock(mtx);
-
             int type = 0;
             switch(ipProtocol) {
                 case IPPROTO_TCP:
@@ -348,7 +345,6 @@ namespace cppnetlib {
             if(socket == INVALID_SOCKET_DESCRIPTOR) {
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not open socket");
             }
-
             return socket;
         }
 
