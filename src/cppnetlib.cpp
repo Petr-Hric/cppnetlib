@@ -36,6 +36,18 @@ namespace cppnetlib {
 
     static constexpr platform::IoDataSizeT cMaxTransmitionUnitSize = MAX_TRANSMISSION_UNIT;
 
+    static constexpr int direction_lut[] = {
+        CPPNL_SHUT_WR
+        , CPPNL_SHUT_RD
+        , CPPNL_SHUT_RDWR
+    };
+
+    inline int encodeDirection(const Direction direction) {
+        assert(static_cast<std::size_t>(direction) >= 0
+            && static_cast<std::size_t>(direction) < (sizeof(direction_lut) / sizeof(decltype(direction_lut))));
+        return direction_lut[static_cast<std::size_t>(direction)];
+    }
+
     namespace exception {
         class UnknownAddressFamilyException : public Exception {
         public:
@@ -64,9 +76,9 @@ namespace cppnetlib {
 
     // Platform dependent definitions/declarations
 
-    #if defined PLATFORM_WINDOWS
-
     namespace error {
+        #if defined PLATFORM_WINDOWS
+
         std::string toString(const NativeErrorCodeT value) {
             std::string output;
             char* message = nullptr;
@@ -85,9 +97,21 @@ namespace cppnetlib {
 
             return output;
         }
-    } // namespace error
+
+        #elif defined PLATFORM_LINUX
+
+        std::string toString(const NativeErrorCodeT value) { return std::strerror(value); }
+
+        #else
+
+        #error Unsupported platform!
+
+        #endif
+    }
 
     namespace platform {
+        #if defined PLATFORM_WINDOWS
+
         class Winsock {
         public:
             Winsock() {
@@ -115,56 +139,8 @@ namespace cppnetlib {
 
         inline error::NativeErrorCodeT nativeErrorCode() { return WSAGetLastError(); }
 
-        SocketT nativeSocketOpen(const NativeFamilyT addressFamily, const int ipProtocol) {
-            static std::mutex mtx;
-            std::lock_guard<std::mutex> lock(mtx);
-
-            int type = 0;
-            switch(ipProtocol) {
-                case IPPROTO_TCP:
-                    type = SOCK_STREAM;
-                    break;
-                case IPPROTO_UDP:
-                    type = SOCK_DGRAM;
-                    break;
-                default:
-                    assert(false);
-                    throw Exception(FUNC_NAME + ": Unknown addressFamily value");
-            }
-
-            const platform::SocketT socket = ::socket(addressFamily, type, ipProtocol);
-            if(socket == INVALID_SOCKET_DESCRIPTOR) {
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not open socket");
-            }
-
-            return socket;
-        }
-
-        void nativeSocketClose(platform::SocketT& socket) {
-            if(::shutdown(socket, CPPNL_SHUT_RDWR) != 0) {
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not shutdown socket");
-            }
-
-            if(::closesocket(socket) != SOCKET_OP_SUCCESSFUL) {
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
-            }
-            socket = INVALID_SOCKET_DESCRIPTOR;
-        }
-
-        error::IOReturnValue nativeConnect(platform::SocketT& socket, const Address& address) {
-            const sockaddr sockAddr = createSockAddr(address);
-            if(::connect(socket, &sockAddr, helpers::toSockLen(address)) != SOCKET_OP_SUCCESSFUL) {
-                const int errorCode = nativeErrorCode();
-                switch(errorCode) {
-                    case WSAEALREADY:
-                    case WSAEWOULDBLOCK:
-                        return error::IOReturnValue::OpWouldBlock;
-                    default:
-                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                            "Could not connect to the server");
-                }
-            }
-            return error::IOReturnValue::Successful;
+        bool nativeSocketCloseWrapper(const platform::SocketT socket) {
+            return ::closesocket(socket) == SOCKET_OP_SUCCESSFUL;
         }
 
         inline bool nativeSetBlocked(platform::SocketT socket, const bool blocked) {
@@ -267,59 +243,13 @@ namespace cppnetlib {
                     "Could not perform getsockopt");
             }
         }
-    } // namespace platform
 
-    #elif defined PLATFORM_LINUX
+        #elif defined PLATFORM_LINUX
 
-    namespace error {
-        std::string toString(const NativeErrorCodeT value) { return std::strerror(value); }
-    } // namespace error
-
-    namespace platform {
         inline error::NativeErrorCodeT nativeErrorCode() { return errno; }
 
-        SocketT nativeSocketOpen(const NativeFamilyT addressFamily, const int ipProtocol) {
-            int type = 0;
-            switch(ipProtocol) {
-                case IPPROTO_TCP:
-                    type = SOCK_STREAM;
-                    break;
-                case IPPROTO_UDP:
-                    type = SOCK_DGRAM;
-                    break;
-                default:
-                    assert(false);
-                    throw Exception(FUNC_NAME + ": Unknown addressFamily value");
-            }
-
-            const platform::SocketT socket = ::socket(addressFamily, type, ipProtocol);
-            if(socket == INVALID_SOCKET_DESCRIPTOR) {
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not create socket");
-            }
-
-            return socket;
-        }
-
-        void nativeSocketClose(platform::SocketT socket) {
-            if(::shutdown(socket, CPPNL_SHUT_RDWR) != 0) {
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not shutdown socket");
-            }
-
-            if(::close(socket) != SOCKET_OP_SUCCESSFUL) {
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
-            }
-        }
-
-        error::IOReturnValue nativeConnect(platform::SocketT& socket, const Address& address) {
-            const sockaddr sockAddr = createSockAddr(address);
-            if(::connect(socket, &sockAddr, helpers::toSockLen(address)) != SOCKET_OP_SUCCESSFUL) {
-                if(nativeErrorCode() == EWOULDBLOCK) {
-                    return error::IOReturnValue::OpWouldBlock;
-                }
-                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
-                    "Could not connect to the server");
-            }
-            return error::IOReturnValue::Successful;
+        bool nativeSocketCloseWrapper(const platform::SocketT socket) {
+            return ::close(socket) == SOCKET_OP_SUCCESSFUL;
         }
 
         bool nativeSetBlocked(platform::SocketT socket, const bool blocked) {
@@ -388,15 +318,78 @@ namespace cppnetlib {
                     "Could not perform getsockopt");
             }
         }
-    } // namespace platform
 
-    #else
+        #else
 
-    #error Unsupported platform!
+        #error Unsupported platform!
 
-    #endif
+        #endif
 
-        // Helpers
+        // Common
+
+        SocketT nativeSocketOpen(const NativeFamilyT addressFamily, const int ipProtocol) {
+            static std::mutex mtx;
+            std::lock_guard<std::mutex> lock(mtx);
+
+            int type = 0;
+            switch(ipProtocol) {
+                case IPPROTO_TCP:
+                    type = SOCK_STREAM;
+                    break;
+                case IPPROTO_UDP:
+                    type = SOCK_DGRAM;
+                    break;
+                default:
+                    assert(false);
+                    throw Exception(FUNC_NAME + ": Unknown addressFamily value");
+            }
+
+            const platform::SocketT socket = ::socket(addressFamily, type, ipProtocol);
+            if(socket == INVALID_SOCKET_DESCRIPTOR) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not open socket");
+            }
+
+            return socket;
+        }
+
+        void nativeSocketShutdown(const platform::SocketT socket, const Direction direction) {
+            if(::shutdown(socket, encodeDirection(direction)) != 0) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not shutdown socket");
+            }
+        }
+
+        void nativeSocketClose(platform::SocketT& socket) {
+            if(!nativeSocketCloseWrapper(socket)) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not close socket");
+            }
+            socket = INVALID_SOCKET_DESCRIPTOR;
+        }
+
+        error::ConnectResult nativeConnect(platform::SocketT& socket, const Address& address) {
+            const sockaddr sockAddr = createSockAddr(address);
+            if(::connect(socket, &sockAddr, helpers::toSockLen(address)) != SOCKET_OP_SUCCESSFUL) {
+                const int errorCode = nativeErrorCode();
+                switch(errorCode) {
+                    case CPPNL_ALREADYCONNECTED:
+                        return error::ConnectResult::AlreadyConnected;
+                    case CPPNL_OPWOULDBLOCK:
+                        return error::ConnectResult::OpWouldBlock;
+                    case CPPNL_NETWORK_UNREACHABLE:
+                        return error::ConnectResult::NetworkUnreachable;
+                    case CPPNL_TIMEDOUT:
+                        return error::ConnectResult::OperationTimedOut;
+                    case CPPNL_CONNECTION_REFUSED:
+                        return error::ConnectResult::Refused;
+                    default:
+                        throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME,
+                            "Could not connect to the server");
+                }
+            }
+            return error::ConnectResult::Successful;
+        }
+    }
+
+    // Helpers
 
     namespace helpers {
         platform::NativeFamilyT toNativeFamily(const IPVer ipVersion) {
@@ -624,10 +617,37 @@ namespace cppnetlib {
     // Error
 
     namespace error {
-        std::string toString(const IOReturnValue value) {
-            assert(static_cast<std::size_t>(value) < 3);
-            static const std::string errorMessage[] = { { "Operation should be blocked" },
-                                                        { "Gracefully disconnected" } };
+        std::string toString(const IResult value) {
+            assert(static_cast<std::size_t>(value) < 8);
+            static const std::string errorMessage[] = {
+                "OpWouldBlock"
+                , "ConnectionRefused"
+                , "NoMemoryAvailable"
+                , "NotConnected"
+                , "SocketPassedIsNotValid"
+                , "ConnectionAbort"
+                , "Disconnected"
+                , "Successful"
+            };
+
+            return errorMessage[static_cast<size_t>(value)];
+        }
+
+        std::string toString(const OResult value) {
+            assert(static_cast<std::size_t>(value) < 11);
+            static const std::string errorMessage[] = {
+                  "NoAccess"
+                , "OpWouldBlock"
+                , "ConnectionReset"
+                , "NoDestinationAddressProvidedInNonConnectionMode"
+                , "InvalidArgument"
+                , "DestinationAddressProvidedInConnectionMode"
+                , "NoMemoryAvailable"
+                , "NotConnected"
+                , "SocketPassedIsNotValid"
+                , "ConnectionAbort"
+                , "Successful"
+            };
 
             return errorMessage[static_cast<size_t>(value)];
         }
@@ -689,6 +709,10 @@ namespace cppnetlib {
             } else if(retv != SOCKET_OP_SUCCESSFUL) {
                 throw Exception(FUNC_NAME + ": Unknown error occured");
             } // else: Operation successful
+        }
+
+        void SocketBase::shutdown(const Direction direction) const {
+            platform::nativeSocketShutdown(mSocket, direction);
         }
 
         void SocketBase::setBlocked(const bool blocked) {
@@ -899,26 +923,26 @@ namespace cppnetlib {
                 openSocket(address.ip().version());
             }
 
-            const error::IOReturnValue errorCode = platform::nativeConnect(mSocket, address);
+            const error::ConnectResult errorCode = platform::nativeConnect(mSocket, address);
             switch(errorCode) {
-                case error::IOReturnValue::Successful:
+                case error::ConnectResult::Successful:
                     return true;
-                case error::IOReturnValue::OpWouldBlock:
+                case error::ConnectResult::OpWouldBlock:
                     if(getConnectTimeout().count() > 0 && rwTimeout(OpTimeout::Write, getConnectTimeout())) {
-                        return error::makeError<bool, error::ConnectReturnValue>(
-                            error::ConnectReturnValue::OperationTimedOut);
+                        return error::makeError<bool, error::ConnectResult>(
+                            error::ConnectResult::OperationTimedOut);
                     } else {
                         if(rwTimeout(OpTimeout::Write, mConnectTimeout)) {
-                            return error::makeError<bool, error::ConnectReturnValue>(
-                                error::ConnectReturnValue::OpWouldBlock);
+                            return error::makeError<bool, error::ConnectResult>(
+                                error::ConnectResult::OpWouldBlock);
                         } else {
                             return true;
                         }
                     }
                     break;
                 default:
-                    assert(false);
-                    throw Exception("Unknown error code " + std::to_string(static_cast<int>(errorCode)));
+                    return error::makeError<bool, error::ConnectResult>(
+                        errorCode);
             }
         }
 
@@ -958,15 +982,15 @@ namespace cppnetlib {
             onAccept(std::move(socket), createAddress(addr), userArg);
         }
 
-        IOResult TCPSocketBase::send(const TransmitDataT* data, const std::size_t size) {
+        OResult TCPSocketBase::send(const TransmitDataT* data, const std::size_t size) {
             assert(data != nullptr);
             if(!isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not send data, because the socket is not open");
             }
 
             if(rwTimeout(OpTimeout::Write, mSendTimeout)) {
-                return error::makeError<std::size_t, error::IOReturnValue>(
-                    error::IOReturnValue::OperationTimedOut);
+                return error::makeError<std::size_t, error::OResult>(
+                    error::OResult::OpWouldBlock);
             }
 
             const platform::NetLibRetvT retv =
@@ -979,13 +1003,13 @@ namespace cppnetlib {
                 const error::NativeErrorCodeT errorCode = platform::nativeErrorCode();
                 switch(errorCode) {
                     case CPPNL_OPWOULDBLOCK:
-                        return error::makeError<std::size_t, error::IOReturnValue>(
-                            error::IOReturnValue::OpWouldBlock);
-                    case CPPNL_FORCEDISCONNECT:
+                        return error::makeError<std::size_t, error::OResult>(
+                            error::OResult::OpWouldBlock);
+                    case CPPNL_CONNECTION_RESET:
                         close();
 
-                        return error::makeError<std::size_t, error::IOReturnValue>(
-                            error::IOReturnValue::ForciblyDisconnected);
+                        return error::makeError<std::size_t, error::OResult>(
+                            error::OResult::ConnectionReset);
                     default:
                         throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
                 }
@@ -996,15 +1020,15 @@ namespace cppnetlib {
             return static_cast<std::size_t>(retv);
         }
 
-        IOResult TCPSocketBase::receive(TransmitDataT* data, const std::size_t maxSize) {
+        IResult TCPSocketBase::receive(TransmitDataT* data, const std::size_t maxSize) {
             assert(data != nullptr);
             if(!isSocketOpen()) {
                 throw Exception(FUNC_NAME + ": Could not receive data, because the socket is not open");
             }
 
             if(rwTimeout(OpTimeout::Read, mRecvTimeout)) {
-                return error::makeError<std::size_t, error::IOReturnValue>(
-                    error::IOReturnValue::OperationTimedOut);
+                return error::makeError<std::size_t, error::IResult>(
+                    error::IResult::OpWouldBlock);
             }
 
             const platform::NetLibRetvT retv =
@@ -1018,20 +1042,19 @@ namespace cppnetlib {
                 const error::NativeErrorCodeT errorCode = platform::nativeErrorCode();
                 switch(errorCode) {
                     case CPPNL_OPWOULDBLOCK:
-                        return error::makeError<std::size_t, error::IOReturnValue>(
-                            error::IOReturnValue::OpWouldBlock);
-                    case CPPNL_FORCEDISCONNECT:
-                    case CPPNL_CONNECTIONABORT:
+                        return error::makeError<std::size_t, error::IResult>(
+                            error::IResult::OpWouldBlock);
+                    case CPPNL_CONNECTION_ABORT:
                         close();
 
-                        return error::makeError<std::size_t, error::IOReturnValue>(
-                            error::IOReturnValue::ForciblyDisconnected);
+                        return error::makeError<std::size_t, error::IResult>(
+                            error::IResult::ConnectionAbort);
                     default:
                         throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not recv data");
                 }
             } else if(retv == 0) {
-                return error::makeError<std::size_t, error::IOReturnValue>(
-                    error::IOReturnValue::GracefullyDisconnected);
+                return error::makeError<std::size_t, error::IResult>(
+                    error::IResult::Disconnected);
             }
 
             assert(retv > 0);
@@ -1074,7 +1097,7 @@ namespace cppnetlib {
             setBlocked(false);
         }
 
-        IOResult
+        OResult
             UDPSocketBase::sendTo(const TransmitDataT* data, const std::size_t size, const Address& address) {
             assert(data != nullptr);
 
@@ -1083,8 +1106,8 @@ namespace cppnetlib {
             }
 
             if(rwTimeout(OpTimeout::Write, mSendToTimeout)) {
-                return error::makeError<std::size_t, error::IOReturnValue>(
-                    error::IOReturnValue::OperationTimedOut);
+                return error::makeError<std::size_t, error::OResult>(
+                    error::OResult::OpWouldBlock);
             }
 
             const sockaddr sockAddr = createSockAddr(address);
@@ -1099,8 +1122,8 @@ namespace cppnetlib {
 
             if(retv == SOCKET_OP_UNSUCCESSFUL) {
                 if(platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
-                    return error::makeError<std::size_t, error::IOReturnValue>(
-                        error::IOReturnValue::OpWouldBlock);
+                    return error::makeError<std::size_t, error::OResult>(
+                        error::OResult::OpWouldBlock);
                 }
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not send data");
             }
@@ -1110,7 +1133,7 @@ namespace cppnetlib {
             return static_cast<std::size_t>(retv);
         }
 
-        IOResult
+        IResult
             UDPSocketBase::receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) {
             assert(data != nullptr);
 
@@ -1119,8 +1142,8 @@ namespace cppnetlib {
             }
 
             if(rwTimeout(OpTimeout::Read, mRecvFromTimeout)) {
-                return error::makeError<std::size_t, error::IOReturnValue>(
-                    error::IOReturnValue::OperationTimedOut);
+                return error::makeError<std::size_t, error::IResult>(
+                    error::IResult::OpWouldBlock);
             }
 
             sockaddr sockAddr = {};
@@ -1136,8 +1159,8 @@ namespace cppnetlib {
 
             if(retv == SOCKET_OP_UNSUCCESSFUL) {
                 if(platform::nativeErrorCode() == CPPNL_OPWOULDBLOCK) {
-                    return error::makeError<std::size_t, error::IOReturnValue>(
-                        error::IOReturnValue::OpWouldBlock);
+                    return error::makeError<std::size_t, error::IResult>(
+                        error::IResult::OpWouldBlock);
                 }
                 throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not receive data");
             }
@@ -1170,11 +1193,11 @@ namespace cppnetlib {
 
         ClientBase<IPProto::TCP>::~ClientBase() {}
 
-        IOResult ClientBase<IPProto::TCP>::send(const TransmitDataT* data, const std::size_t size) {
+        OResult ClientBase<IPProto::TCP>::send(const TransmitDataT* data, const std::size_t size) {
             return TCPSocketBase::send(data, size);
         }
 
-        IOResult ClientBase<IPProto::TCP>::receive(TransmitDataT* data, const std::size_t maxSize) {
+        IResult ClientBase<IPProto::TCP>::receive(TransmitDataT* data, const std::size_t maxSize) {
             return TCPSocketBase::receive(data, maxSize);
         }
 
@@ -1211,13 +1234,13 @@ namespace cppnetlib {
 
         void Client<IPProto::UDP>::bind(const Address& address, const bool allowReuse) { SocketBase::bind(address, allowReuse); }
 
-        IOResult Client<IPProto::UDP>::sendTo(const TransmitDataT* data,
+        OResult Client<IPProto::UDP>::sendTo(const TransmitDataT* data,
             const std::size_t size,
             const Address& address) {
             return UDPSocketBase::sendTo(data, size, address);
         }
 
-        IOResult
+        IResult
             Client<IPProto::UDP>::receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address) {
             return UDPSocketBase::receiveFrom(data, maxSize, address);
         }

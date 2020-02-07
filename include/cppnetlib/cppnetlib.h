@@ -22,6 +22,12 @@ namespace cppnetlib {
 
     enum class UDPTimeoutFor { SendTo, ReceiveFrom };
 
+    enum class Direction : std::size_t {
+        Upload = 0
+        , Download = 1
+        , Both = 2
+    };
+
     using PortT = uint16_t;
     using TransmittedDataSizeT = std::size_t;
     using TransmitDataT = uint8_t;
@@ -127,18 +133,38 @@ namespace cppnetlib {
     // Error namespace
 
     namespace error {
-        enum class IOReturnValue {
-            Successful,
-            OpWouldBlock,
-            GracefullyDisconnected,
-            ForciblyDisconnected,
-            OperationTimedOut
+        enum class OResult {
+            NoAccess
+            , OpWouldBlock
+            , ConnectionReset
+            , NoDestinationAddressProvidedInNonConnectionMode
+            , InvalidArgument
+            , DestinationAddressProvidedInConnectionMode
+            , NoMemoryAvailable
+            , NotConnected
+            , SocketPassedIsNotValid
+            , ConnectionAbort
+            , Successful
         };
 
-        enum class ConnectReturnValue {
-            Successful,
-            OpWouldBlock,
-            OperationTimedOut
+        enum class IResult {
+            OpWouldBlock
+            , ConnectionRefused
+            , NoMemoryAvailable
+            , NotConnected
+            , SocketPassedIsNotValid
+            , ConnectionAbort
+            , Disconnected
+            , Successful
+        };
+
+        enum class ConnectResult {
+            Successful
+            , OpWouldBlock
+            , OperationTimedOut
+            , AlreadyConnected
+            , Refused
+            , NetworkUnreachable
         };
 
         template <typename ValueT, typename ErrorT>
@@ -187,8 +213,9 @@ namespace cppnetlib {
         }
     } // namespace error
 
-    using IOResult = error::ExpectedValue<std::size_t, error::IOReturnValue>;
-    using ConnectResult = error::ExpectedValue<bool, error::ConnectReturnValue>;
+    using IResult = error::ExpectedValue<std::size_t, error::IResult>;
+    using OResult = error::ExpectedValue<std::size_t, error::OResult>;
+    using ConnectResult = error::ExpectedValue<bool, error::ConnectResult>;
 
     // Platform namespace
 
@@ -240,6 +267,8 @@ namespace cppnetlib {
             void close();
 
             void bind(const Address& address, const bool allowReuse);
+
+            void shutdown(const Direction direction) const;
 
             bool blocked() const;
 
@@ -305,9 +334,9 @@ namespace cppnetlib {
                 onAccept,
                 void* userArg = nullptr) const;
 
-            IOResult send(const TransmitDataT* data, const std::size_t size);
+            OResult send(const TransmitDataT* data, const std::size_t size);
 
-            IOResult receive(TransmitDataT* data, const std::size_t maxSize);
+            IResult receive(TransmitDataT* data, const std::size_t maxSize);
 
             template<typename T = Millis>
             void setTimeout(const TCPTimeoutFor timeoutFor, const T& timeout) {
@@ -351,9 +380,9 @@ namespace cppnetlib {
 
             virtual ~UDPSocketBase();
 
-            IOResult sendTo(const TransmitDataT* data, const std::size_t size, const Address& address);
+            OResult sendTo(const TransmitDataT* data, const std::size_t size, const Address& address);
 
-            IOResult receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address);
+            IResult receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address);
 
             template<typename T = Millis>
             void setTimeout(const UDPTimeoutFor timeoutFor, const T& timeout) {
@@ -405,9 +434,9 @@ namespace cppnetlib {
 
             virtual ~ClientBase();
 
-            IOResult send(const TransmitDataT* data, const std::size_t size);
+            OResult send(const TransmitDataT* data, const std::size_t size);
 
-            IOResult receive(TransmitDataT* data, const std::size_t maxSize);
+            IResult receive(TransmitDataT* data, const std::size_t maxSize);
 
             bool isSocketOpen() const;
 
@@ -469,9 +498,9 @@ namespace cppnetlib {
 
             void bind(const Address& address, const bool allowReuse = false);
 
-            IOResult sendTo(const TransmitDataT* data, const std::size_t size, const Address& address);
+            OResult sendTo(const TransmitDataT* data, const std::size_t size, const Address& address);
 
-            IOResult receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address);
+            IResult receiveFrom(TransmitDataT* data, const std::size_t maxSize, Address& address);
 
             bool isSocketOpen() const;
 
