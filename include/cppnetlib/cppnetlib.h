@@ -7,6 +7,7 @@
 #include <functional>
 #include <string>
 #include <chrono>
+#include <deque>
 
 #define FUNC_NAME std::string(__func__)
 #define MAX_TRANSMISSION_UNIT 1200
@@ -43,8 +44,6 @@ namespace cppnetlib {
     To TimeCast(const std::chrono::duration<Rep, Period>& duration) {
         return std::chrono::duration_cast<To, Rep, Period>(duration);
     }
-
-
 
     // Ip
 
@@ -169,6 +168,7 @@ namespace cppnetlib {
             , AlreadyConnected
             , Refused
             , NetworkUnreachable
+            , NetworkDown
         };
 
         template <typename ValueT, typename ErrorT>
@@ -278,6 +278,26 @@ namespace cppnetlib {
 
             bool isSocketOpen() const;
 
+            static bool wait(std::deque<SocketBase*>* const read
+                , std::deque<SocketBase*>* const write
+                , std::deque<SocketBase*>* const error
+                , const BaseTimeUnit& timeout);
+
+            static bool waitRead(SocketBase& read, const BaseTimeUnit& timeout) {
+                std::deque<SocketBase*> deque = { &read };
+                return wait(&deque, nullptr, nullptr, timeout);
+            }
+
+            static bool waitWrite(SocketBase& write, const BaseTimeUnit& timeout) {
+                std::deque<SocketBase*> deque = { &write };
+                return wait(nullptr, &deque, nullptr, timeout);
+            }
+
+            static bool waitError(SocketBase& error, const BaseTimeUnit& timeout) {
+                std::deque<SocketBase*> deque = { &error };
+                return wait(nullptr, nullptr, &deque, timeout);
+            }
+
         private:
             bool mBlocking;
 
@@ -297,7 +317,7 @@ namespace cppnetlib {
         protected:
             virtual void openSocket(const IPVer ipVer) = 0;
 
-            friend class BlockGuard;
+            friend class SocketBaseAccessor;
         };
 
         class TCPSocketBase : public SocketBase {

@@ -728,6 +728,109 @@ namespace cppnetlib {
 
         bool SocketBase::isSocketOpen() const { return mSocket != INVALID_SOCKET_DESCRIPTOR; }
 
+        class SocketBaseAccessor {
+        public:
+            static void setFdSet(std::deque<SocketBase*>& set, ::fd_set& fdSet, platform::SocketT& maxFd) {
+                FD_ZERO(&fdSet);
+
+                for(const auto it : set) {
+                    it->mSocket;
+
+                    assert(it != nullptr);
+
+                    FD_SET((*it).mSocket, &fdSet);
+
+                    if((*it).mSocket > maxFd) {
+                        maxFd = (*it).mSocket;
+                    }
+                }
+            }
+
+            static void filterFdSet(std::deque<SocketBase*>& set, const ::fd_set& fdSet) {
+                for(std::deque<SocketBase*>::iterator it = set.begin(); it != set.end();) {
+                    assert(*it != nullptr);
+
+                    if(FD_ISSET((*it)->mSocket, &fdSet) == 0) {
+                        it = set.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+            }
+
+            static error::OResult error() {
+                    //#define ETIMEDOUT    110 /* Connection timed out */
+                    //#define ECONNREFUSED 111 /* Connection refused */
+                    //#define EHOSTDOWN    112 /* Host is down */
+                    //#define EHOSTUNREACH 113 /* No route to host */
+                    //#define EALREADY     114 /* Operation already in progress */
+                    //#define EINPROGRESS  115 /* Operation now in progress */
+
+                error::ConnectResult::OperationTimedOut;
+                error::ConnectResult::Refused;
+                //
+                error::ConnectResult::NetworkUnreachable;
+                error::ConnectResult::AlreadyConnected;
+                error::ConnectResult::NetworkDown;
+            }
+        };
+
+        bool SocketBase::wait(std::deque<SocketBase*>* const read
+            , std::deque<SocketBase*>* const write
+            , std::deque<SocketBase*>* const error
+            , const BaseTimeUnit& timeout) {
+            platform::SocketT maxFd = 0;
+
+            std::unique_ptr<fd_set> fdReadSet;
+            if(read) {
+                fdReadSet.reset(new fd_set);
+                SocketBaseAccessor::setFdSet(*read, *fdReadSet, maxFd);
+            }
+
+            std::unique_ptr<fd_set> fdWriteSet;
+            if(write) {
+                fdWriteSet.reset(new fd_set);
+                SocketBaseAccessor::setFdSet(*write, *fdWriteSet, maxFd);
+            }
+
+            std::unique_ptr<fd_set> fdErrorSet;
+            if(error) {
+                fdErrorSet.reset(new fd_set);
+                SocketBaseAccessor::setFdSet(*error, *fdErrorSet, maxFd);
+            }
+
+            const BaseTimeUnit::rep sec = timeout.count() / static_cast<BaseTimeUnit::rep>(1000000);
+            const BaseTimeUnit::rep uSec = timeout.count() % static_cast<BaseTimeUnit::rep>(1000000);
+
+            assert(sec <= std::numeric_limits<long>::max());
+            assert(uSec <= std::numeric_limits<long>::max());
+
+            const timeval tv = {
+                static_cast<long>(sec)
+                , static_cast<long>(uSec)
+            };
+
+            const int selectRetv = select(static_cast<int>(maxFd + 1), fdReadSet.get(), fdWriteSet.get(), fdErrorSet.get(), &tv);
+            if(selectRetv == 0) {
+                return false;
+            } else if(selectRetv == SOCKET_OP_UNSUCCESSFUL) {
+                throw exception::ExceptionWithSystemErrorMessage(FUNC_NAME, "Could not perform select");
+            } else {
+                if(read != nullptr) {
+                    SocketBaseAccessor::filterFdSet(*read, *fdReadSet);
+                }
+
+                if(write != nullptr) {
+                    SocketBaseAccessor::filterFdSet(*write, *fdWriteSet);
+                }
+
+                if(error != nullptr) {
+                    SocketBaseAccessor::filterFdSet(*error, *fdErrorSet);
+                }
+            }
+            return true;
+        }
+
         bool SocketBase::rwTimeout(const OpTimeout selectTimeoutFor, const BaseTimeUnit& timeout) const {
             if(!isSocketOpen()) {
                 throw Exception(FUNC_NAME +
@@ -1008,7 +1111,7 @@ namespace cppnetlib {
                         return error::makeError<bool, error::ConnectResult>(
                             error::ConnectResult::OperationTimedOut);
                     } else {
-                        if(rwTimeout(OpTimeout::Write, mConnectTimeout)) {
+                        if(!waitWrite(*this, mConnectTimeout)) {
                             return error::makeError<bool, error::ConnectResult>(
                                 error::ConnectResult::OpWouldBlock);
                         } else {
