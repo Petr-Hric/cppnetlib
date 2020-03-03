@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cassert>
 #include <iostream>
+#include <memory>
 
 #define SOCKET_OP_SUCCESSFUL 0
 
@@ -734,8 +735,6 @@ namespace cppnetlib {
                 FD_ZERO(&fdSet);
 
                 for(const auto it : set) {
-                    it->mSocket;
-
                     assert(it != nullptr);
 
                     FD_SET((*it).mSocket, &fdSet);
@@ -758,21 +757,21 @@ namespace cppnetlib {
                 }
             }
 
-            static error::OResult error() {
-                    //#define ETIMEDOUT    110 /* Connection timed out */
-                    //#define ECONNREFUSED 111 /* Connection refused */
-                    //#define EHOSTDOWN    112 /* Host is down */
-                    //#define EHOSTUNREACH 113 /* No route to host */
-                    //#define EALREADY     114 /* Operation already in progress */
-                    //#define EINPROGRESS  115 /* Operation now in progress */
-
-                error::ConnectResult::OperationTimedOut;
-                error::ConnectResult::Refused;
-                //
-                error::ConnectResult::NetworkUnreachable;
-                error::ConnectResult::AlreadyConnected;
-                error::ConnectResult::NetworkDown;
-            }
+            // static error::OResult error() {
+            //         //#define ETIMEDOUT    110 /* Connection timed out */
+            //         //#define ECONNREFUSED 111 /* Connection refused */
+            //         //#define EHOSTDOWN    112 /* Host is down */
+            //         //#define EHOSTUNREACH 113 /* No route to host */
+            //         //#define EALREADY     114 /* Operation already in progress */
+            //         //#define EINPROGRESS  115 /* Operation now in progress */
+            // 
+            //     error::ConnectResult::OperationTimedOut;
+            //     error::ConnectResult::Refused;
+            //     //
+            //     error::ConnectResult::NetworkUnreachable;
+            //     error::ConnectResult::AlreadyConnected;
+            //     error::ConnectResult::NetworkDown;
+            // }
         };
 
         bool SocketBase::wait(std::deque<SocketBase*>* const read
