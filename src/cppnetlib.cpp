@@ -804,7 +804,7 @@ namespace cppnetlib {
             assert(sec <= std::numeric_limits<long>::max());
             assert(uSec <= std::numeric_limits<long>::max());
 
-            const timeval tv = {
+            timeval tv = {
                 static_cast<long>(sec)
                 , static_cast<long>(uSec)
             };
