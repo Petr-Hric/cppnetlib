@@ -44,8 +44,7 @@ namespace cppnetlib {
     };
 
     inline int encodeDirection(const Direction direction) {
-        assert(static_cast<std::size_t>(direction) >= 0
-            && static_cast<std::size_t>(direction) < (sizeof(direction_lut) / sizeof(decltype(direction_lut))));
+        assert(static_cast<std::size_t>(direction) < (sizeof(direction_lut) / sizeof(decltype(direction_lut))));
         return direction_lut[static_cast<std::size_t>(direction)];
     }
 
@@ -83,16 +82,18 @@ namespace cppnetlib {
         std::string toString(const NativeErrorCodeT value) {
             std::string output;
             char* message = nullptr;
-            FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            if(0 == FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
                 FORMAT_MESSAGE_IGNORE_INSERTS,
                 nullptr,
                 value,
                 MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
                 (LPSTR)&message,
                 0,
-                nullptr);
+                nullptr) {
+                    return "";
+                }
 
-            output = *message;
+            output = message;
 
             LocalFree(message);
 
